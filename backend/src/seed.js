@@ -356,6 +356,230 @@ function seedDemoUsers() {
   console.log('  demo users created: player@demo.local / Demo12345! (+ raze, volt)');
 }
 
+// Starter blog articles. Seeded only when the articles table is completely
+// empty, so admin-authored content is never overwritten. Topics and wording are
+// honest editorial - no invented benchmarks, prices or test results.
+const STARTER_ARTICLES = [
+  {
+    slug: 'verified-hardware-catalog',
+    title: 'Why LevelCore Only Lists Verified Hardware Data',
+    excerpt: 'Every component in our catalog comes with a documented source. Here is how we keep hardware data honest.',
+    cover_color: '#7c5cff',
+    tags: ['Hardware', 'Data', 'LevelCore'],
+    content: `# Why we publish only verified data
+
+A PC parts catalog is only as good as the numbers behind it. Wrong clock speeds, guessed power draws or invented price ranges quietly break every tool that depends on them - from the FPS calculator to the compatibility checks.
+
+## Where the data comes from
+
+Each component we list is checked against a named source:
+
+- **GPU specifications** - cross-checked with the TechPowerUp GPU database and official product pages.
+- **CPU specifications** - verified against manufacturer spec sheets and reference tables.
+- **RAM and other parts** - matched to the vendor's own listing.
+
+## What "verified" means for you
+
+Because entries carry a source and, where relevant, a release year, you can always trace a number back to something you can open yourself.
+
+> We prefer a smaller, accurate catalog over a large one with guessed values.
+
+## Prices we stand behind
+
+Prices are shown when we have a real reference for them. If a component has no reliable current price, we show it without one instead of inventing a figure. You will never see a made-up number pretending to be a market price.
+
+## How to report an error
+
+Found a specification that looks wrong? Use the contact form - we review every report and correct the catalog when the evidence checks out.`,
+  },
+  {
+    slug: 'how-to-use-the-fps-calculator',
+    title: 'How to Use the FPS Calculator Correctly',
+    excerpt: 'Get realistic frame-rate estimates by choosing the right GPU, CPU, game and settings - and learn what the numbers really mean.',
+    cover_color: '#22d3ee',
+    tags: ['FPS', 'Calculator', 'Guide'],
+    content: `# How to use the FPS calculator correctly
+
+The FPS calculator estimates how many frames per second a given CPU and GPU combination can produce in a specific game. It is a guide for planning, not a guarantee of your exact results.
+
+## Step by step
+
+1. Pick the game you want to run.
+2. Pick the GPU you own or plan to buy.
+3. Pick the CPU (optional but recommended - it matters in many titles).
+4. Choose your target resolution, quality preset and upscaling mode.
+5. Run the estimate and read the confidence grade.
+
+## How the estimate works
+
+Every component in the catalog carries a **relative performance index**. The engine combines the GPU and CPU indexes, applies the workload profile of the chosen game and quality level, and scales the result to the target resolution.
+
+Upscaling options such as DLSS, FSR or XeSS are applied only when both the game and the GPU support them - we do not assume support that does not exist.
+
+## Why your real FPS can differ
+
+Several things change real-world results:
+
+- Background software and thermal behaviour on your specific machine.
+- Driver versions and game patches that alter performance.
+- Whether the game is CPU-heavy or GPU-heavy at your chosen settings.
+
+## Trust the confidence grade
+
+When the calculator has strong source data for a GPU and game, it reports **high confidence**. When a game is unusual or a GPU is very new, confidence drops - treat the result as an approximation.
+
+Use the result as a sanity check when choosing a GPU or upgrading, not as a lab measurement.`,
+  },
+  {
+    slug: 'cpu-or-gpu-budget-priority',
+    title: 'CPU or GPU: Where Should Your Gaming Budget Go?',
+    excerpt: 'The oldest question in PC building - and the answer depends on your resolution, refresh rate and the games you play.',
+    cover_color: '#6366f1',
+    tags: ['PC Builder', 'Budget', 'Buying Guide'],
+    content: `# CPU or GPU: where should your gaming budget go?
+
+Almost every build question starts the same way: "should I spend more on the CPU or the GPU?" The honest answer is that it depends on the games you play and the resolution you play at.
+
+## The general rule
+
+- At **1080p with a high refresh-rate monitor**, the CPU matters more. Competitive shooters and esports titles are often CPU-limited at low quality settings and high frame rates.
+- At **1440p and 4K**, the GPU dominates. The graphics card does most of the heavy lifting, and a mid-range CPU is usually enough.
+- For **single-player AAA games**, the GPU is typically the bottleneck once the CPU meets a reasonable floor.
+
+## Signs your CPU is holding you back
+
+- Frame rates that barely change when you lower the resolution.
+- Frequent frame-time stutters even when average FPS looks fine.
+- Very high CPU usage in games that should be light.
+
+## A practical starting point
+
+Match the GPU to your monitor first, because that is where visual quality comes from. Then spend enough on the CPU to avoid leaving performance on the table at your target frame rate.
+
+> Use the FPS calculator for the specific games you play - it will show you whether your CPU or your GPU is the limiting part for your own library.
+
+## The LevelCore builder can help
+
+Set a budget and the games you care about, and the builder will find a balanced configuration instead of a lopsided one.`,
+  },
+  {
+    slug: 'what-is-a-cpu-bottleneck',
+    title: 'What Is a CPU Bottleneck and Should You Worry?',
+    excerpt: 'A clear, calm explanation of CPU and GPU limits - and why a "bottleneck" is normal, not a flaw.',
+    cover_color: '#0ea5e9',
+    tags: ['Bottleneck', 'CPU', 'GPU'],
+    content: `# What is a CPU bottleneck and should you worry?
+
+Every computer has a bottleneck. One part finishes its work before another, so the slower part decides how fast the whole system goes. That is not a design flaw - it is how computers work.
+
+## CPU-bound vs GPU-bound
+
+- A system is **GPU-bound** when the graphics card is the limiting part. This is what most gamers want: the GPU runs near 100 percent and the CPU has headroom.
+- A system is **CPU-bound** when the processor cannot feed the GPU fast enough. Lowering the resolution does not help, because the CPU still has to do the same amount of game logic work.
+
+## How to tell which one you have
+
+1. Play a scene at your normal settings and watch GPU usage.
+2. Lower the resolution dramatically.
+3. If FPS stays about the same, the CPU is the limit. If FPS jumps, the GPU was the limit.
+
+## When it actually matters
+
+A mild CPU limit in one or two games is rarely a reason to upgrade. A severe, constant CPU limit across the games you actually play is a different story.
+
+## The LevelCore bottleneck tool
+
+Open the bottleneck checker, choose your CPU and GPU, and it will compare their relative performance indexes and show where the balance sits - with the same honest caveats as the FPS calculator.`,
+  },
+  {
+    slug: 'connect-your-steam-library',
+    title: 'How to Connect Your Steam Library to LevelCore',
+    excerpt: 'Import your owned games and playtime so your FPS estimates and performance reports are built on the games you really play.',
+    cover_color: '#a78bfa',
+    tags: ['Steam', 'Import', 'Guide'],
+    content: `# How to connect your Steam library
+
+LevelCore can read which games you own on Steam and how long you have played them. That makes performance tools far more useful, because they target the games you actually play.
+
+## Before you start
+
+Connecting works through the Steam Web API. The site owner enables the connection from the admin panel - when it is enabled you will see the Steam section on the LevelCore Steam page.
+
+## How to find your Steam ID
+
+- Open your Steam profile in a browser.
+- Your custom URL looks like **steamcommunity.com/id/yourname** - you can use the name part.
+- A numeric profile ID also works (for example **76561198000000000**).
+
+## Connect and sync
+
+1. Go to the Steam page inside LevelCore.
+2. Enter your Steam ID or custom URL.
+3. Click connect - Steam is not asked for your password; only the public profile data is read.
+4. Use sync to refresh your library later.
+
+## What happens next
+
+The import reads your owned games and playtime. LevelCore then matches those games to entries in the verified game catalog so the FPS calculator and performance reports can use them.
+
+> If a game is not yet in our verified catalog, it will not get a made-up estimate - it simply stays unmatched until real data exists.`,
+  },
+  {
+    slug: 'understanding-plans-and-credits',
+    title: 'LevelCore Plans: How Subscriptions and Credits Work',
+    excerpt: 'Everything you need to know about monthly plans, wallet credits and what happens to your subscription at the end of the month.',
+    cover_color: '#10b981',
+    tags: ['Pricing', 'Billing', 'Plans'],
+    content: `# LevelCore plans: subscriptions and credits explained
+
+LevelCore offers a free account plus optional paid plans for heavier use. Subscriptions are managed with recurring monthly billing through Stripe.
+
+## Free vs paid
+
+- The free account includes core tools such as the hardware catalog, FPS calculator, builder, compatibility checks and community benchmarks.
+- Paid plans add more monthly credits for AI-powered features, advanced reports and larger per-month usage.
+
+## Credits, not unlimited AI
+
+AI features consume credits because each request calls a real external model. When you use an AI feature, the relevant service is invoked and credits are deducted for the work actually done. If a service fails or cannot be reached, you are not charged for it.
+
+## Billing details
+
+- Subscriptions renew automatically every month and can be cancelled at any time from the pricing page.
+- Payment is handled by Stripe; LevelCore never stores your card number.
+- Plan changes and refunds go through the billing dashboard.
+
+## Need to change or cancel?
+
+Use the plan management buttons on the pricing page. You keep access until the end of the billing period you have already paid for.`,
+  },
+];
+
+const PUBLISH_DATES = [
+  '2026-08-30T10:00:00Z', '2026-08-27T12:00:00Z', '2026-08-22T09:00:00Z',
+  '2026-08-18T15:00:00Z', '2026-08-14T11:00:00Z', '2026-08-10T09:00:00Z',
+];
+
+function seedStarterArticles() {
+  const existing = db.prepare('SELECT COUNT(*) c FROM articles').get().c;
+  if (existing > 0) {
+    console.log('  starter articles skipped (articles table not empty)');
+    return;
+  }
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO articles
+      (slug, title, excerpt, content, cover_color, tags, author_name, status, published_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'LevelCore', 'published', ?)`
+  );
+  let n = 0;
+  for (let i = 0; i < STARTER_ARTICLES.length; i++) {
+    const a = STARTER_ARTICLES[i];
+    const r = ins.run(a.slug, a.title, a.excerpt, a.content, a.cover_color, JSON.stringify(a.tags), PUBLISH_DATES[i] || new Date().toISOString());
+    if (r.changes) n++;
+  }
+  console.log(`  starter articles added: ${n}`);
+}
+
 export function seed({ demo = true, admin = true } = {}) {
   console.log('Seeding database...');
   migrate();
@@ -367,6 +591,7 @@ export function seed({ demo = true, admin = true } = {}) {
     if (admin) seedAdmin();
     seedAdminSettings();
     ensureBillingDefaults();
+    seedStarterArticles();
     if (demo) seedDemoUsers();
   })();
   console.log(`Seed complete. (demo=${demo}, admin=${admin})`);
@@ -395,6 +620,7 @@ export function syncCatalog() {
   db.transaction(() => {
     seedHardware();
     seedRules();
+    seedStarterArticles();
   })();
   console.log('[seed] catalog sync complete');
 }
