@@ -1,6 +1,7 @@
 import { db, migrate } from './db.js';
 import { config } from './config.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { ensureFreePlan, ensureBillingDefaults } from './services/credits.js';
 import {
@@ -387,6 +388,31 @@ export function seedIfEmpty({ demo = false, admin = false } = {}) {
 // ADMIN_PASSWORD. Never auto-creates a default-password admin in production.
 export function ensureAdmin() {
   seedAdmin();
+}
+
+// First-run admin bootstrap: when NO admin account exists and the operator did
+// not set ADMIN_PASSWORD, print a fresh one-time setup token to the server logs
+// on every boot. The token (24h, hashed in the DB) is used at /admin/setup to
+// choose the admin email + password through the browser - no env editing needed.
+// Returning the raw token here lets index.js log it; only its SHA-256 is stored.
+export function issueAdminSetupToken() {
+  if (process.env.ADMIN_PASSWORD) return null;
+  const count = db.prepare('SELECT COUNT(*) c FROM admin_users').get().c;
+  if (count > 0) return null;
+  const raw = crypto.randomBytes(18).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  const expiry = Date.now() + 24 * 3600 * 1000;
+  db.prepare(`INSERT INTO admin_settings (key, value) VALUES ('admin_setup_token', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+    .run(`v1:${hash}:${expiry}`);
+  return raw;
+}
+
+export function adminSetupTokenInfo() {
+  const row = db.prepare("SELECT value FROM admin_settings WHERE key = 'admin_setup_token'").get();
+  if (!row || !row.value) return { active: false };
+  const [, , exp] = String(row.value).split(':');
+  return { active: !!(exp && Date.now() < Number(exp)) };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { db, now } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
-import { ok, fail, parseId } from '../utils/helpers.js';
+import { ok, fail, parseId, sha256 } from '../utils/helpers.js';
 import { grantCredits, deductCredits, getWallet, getActivePlan, ensureFreePlan } from '../services/credits.js';
 import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan } from '../services/payments.js';
 import { adminReferralSummary } from '../services/referrals.js';
@@ -83,6 +83,45 @@ router.post('/login', limiter,
     if (admin.status !== 'active') return fail(res, 403, 'ADMIN_DISABLED', 'This admin account is disabled.');
     db.prepare('UPDATE admin_users SET updated_at=? WHERE id=?').run(now(), admin.id);
     audit(admin, 'admin_login');
+    ok(res, { token: signAdmin(admin), admin: { id: admin.id, email: admin.email, role: admin.role } });
+  });
+
+// GET /api/admin/setup-status  (public) - can the first admin still be created?
+router.get('/setup-status', (req, res) => {
+  const count = db.prepare('SELECT COUNT(*) c FROM admin_users').get().c;
+  const row = db.prepare("SELECT value FROM admin_settings WHERE key = 'admin_setup_token'").get();
+  let active = false;
+  if (row && row.value) {
+    const [, , exp] = String(row.value).split(':');
+    active = !!(exp && Date.now() < Number(exp));
+  }
+  ok(res, { adminExists: count > 0, setupTokenActive: active });
+});
+
+// POST /api/admin/setup  (public, one-time) - create the very first admin with a
+// token printed in the server logs. Fails as soon as any admin account exists.
+router.post('/setup', limiter,
+  body('token').trim().notEmpty().withMessage('Setup token required.'),
+  body('email').isEmail().withMessage('Valid email required.').normalizeEmail(),
+  body('password').isLength({ min: 8, max: 128 }).withMessage('Password must be at least 8 characters.'),
+  validate, (req, res) => {
+    const count = db.prepare('SELECT COUNT(*) c FROM admin_users').get().c;
+    if (count > 0) return fail(res, 409, 'ADMIN_EXISTS', 'An admin account already exists. Sign in at /admin/login instead.');
+    const row = db.prepare("SELECT value FROM admin_settings WHERE key = 'admin_setup_token'").get();
+    if (!row || !row.value || !row.value.startsWith('v1:')) return fail(res, 403, 'NO_SETUP', 'No active setup token. Redeploy to generate one.');
+    const [, hash, exp] = String(row.value).split(':');
+    if (!hash || !exp || Date.now() > Number(exp)) return fail(res, 403, 'TOKEN_EXPIRED', 'This setup token has expired. Redeploy to generate a fresh one.');
+    if (hash !== sha256(String(req.body.token).trim())) return fail(res, 403, 'BAD_TOKEN', 'Invalid setup token. Copy it from the server logs.');
+    const em = String(req.body.email).toLowerCase();
+    if (db.prepare('SELECT id FROM admin_users WHERE email = ?').get(em)) {
+      return fail(res, 409, 'EMAIL_TAKEN', 'An admin with this email already exists.');
+    }
+    const ph = bcrypt.hashSync(String(req.body.password), 10);
+    db.prepare('INSERT INTO admin_users (email, password_hash, role, status) VALUES (?, ?, ?, ?)')
+      .run(em, ph, 'superadmin', 'active');
+    db.prepare("DELETE FROM admin_settings WHERE key = 'admin_setup_token'").run();
+    const admin = db.prepare('SELECT id, email, role FROM admin_users WHERE email = ?').get(em);
+    audit(admin, 'admin_setup');
     ok(res, { token: signAdmin(admin), admin: { id: admin.id, email: admin.email, role: admin.role } });
   });
 

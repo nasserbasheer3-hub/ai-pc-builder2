@@ -43,6 +43,7 @@ const PcHardware = lazy(() => import('./pages/PcHardware.jsx'));
 const Blog = lazy(() => import('./pages/Blog.jsx'));
 const ArticlePage = lazy(() => import('./pages/Article.jsx'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin.jsx'));
+const AdminSetup = lazy(() => import('./pages/AdminSetup.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const LegalPage = lazy(() => import('./pages/LegalPage.jsx'));
 const Contact = lazy(() => import('./pages/Contact.jsx'));
@@ -105,6 +106,7 @@ export default function App() {
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<ArticlePage />} />
           <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/setup" element={<AdminSetup />} />
           <Route path="/privacy" element={<LegalPage page="privacy" />} />
           <Route path="/terms" element={<LegalPage page="terms" />} />
           <Route path="/about" element={<LegalPage page="about" />} />

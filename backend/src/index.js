@@ -31,7 +31,7 @@ import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
-import { seedIfEmpty, ensureAdmin } from './seed.js';
+import { seedIfEmpty, ensureAdmin, issueAdminSetupToken } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
 import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled } from './services/payments.js';
 
@@ -46,6 +46,14 @@ try {
   console.error('[seed] auto-seed failed:', e.message);
 }
 
+// First-run admin bootstrap: if no admin exists and no ADMIN_PASSWORD was given,
+// print a fresh one-time setup token (24h) to the logs so the operator can create
+// the admin at /admin/setup from the browser.
+const adminSetupToken = issueAdminSetupToken();
+if (adminSetupToken) {
+  console.log(`[setup] ADMIN SETUP TOKEN (one-time, valid 24h, regenerated on each boot until used): ${adminSetupToken}`);
+}
+
 // Boot diagnostics: clearly report which integrations are configured so an
 // operator (or this assistant, remotely) can see what is still missing.
 console.log(`[setup] database: ${config.dbPath}${config.dbPath === path.resolve(process.cwd(), 'data/gaming_platform.db') ? ' (EPHEMERAL - data is lost on redeploy unless DATABASE_PATH points at a persistent disk)' : ' (persistent)'}`);
@@ -54,7 +62,7 @@ console.log(`[setup] webhook:  ${isWebhookConfigured() ? 'configured' : 'not con
 console.log(`[setup] demo pay: ${demoPaymentsEnabled() ? 'ENABLED (PAYMENT_DEMO=1) - plan upgrades grant credits without real payment' : 'disabled'}`);
 console.log(`[setup] ai:       ${config.ai.apiKey ? `configured (${config.ai.model})` : 'NOT configured - AI chat/coach disabled until USER_LLM_API_KEY is set'}`);
 console.log(`[setup] mail:     ${config.email.smtpHost ? 'configured' : 'NOT configured (SMTP_HOST/USER/PASS) - email links are not delivered'}`);
-console.log(`[setup] admin:    ${process.env.ADMIN_PASSWORD ? `will be ensured: ${config.admin.email}` : 'NOT configured (ADMIN_PASSWORD env) - /admin/login has no account'}`);
+console.log(`[setup] admin:    ${process.env.ADMIN_PASSWORD ? `will be ensured: ${config.admin.email}` : (adminSetupToken ? 'no account yet - one-time setup token printed above (open /admin/setup)' : 'configured')}`);
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-insecure-jwt-secret-change-me') {
   console.warn('[setup] WARNING: JWT_SECRET is the public default - user sessions can be forged. Set a random JWT_SECRET env var.');
 }
