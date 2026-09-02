@@ -31,11 +31,19 @@ import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
+import { seedIfEmpty } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
 import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured } from './services/payments.js';
 
 migrate();
 ensureBillingDefaults();
+// Auto-seed a fresh/empty database on boot (production-safe: no demo users,
+// admin only created when an ADMIN_PASSWORD env is explicitly provided).
+try {
+  seedIfEmpty({ demo: false, admin: Boolean(process.env.ADMIN_PASSWORD) });
+} catch (e) {
+  console.error('[seed] auto-seed failed:', e.message);
+}
 
 const app = express();
 app.set('trust proxy', 1);

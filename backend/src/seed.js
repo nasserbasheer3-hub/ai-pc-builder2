@@ -356,7 +356,7 @@ function seedDemoUsers() {
   console.log('  demo users created: player@demo.local / Demo12345! (+ raze, volt)');
 }
 
-export function seed() {
+export function seed({ demo = true, admin = true } = {}) {
   console.log('Seeding database...');
   migrate();
   db.transaction(() => {
@@ -364,12 +364,24 @@ export function seed() {
     seedGames();
     seedRules();
     seedAchievements();
-    seedAdmin();
+    if (admin) seedAdmin();
     seedAdminSettings();
     ensureBillingDefaults();
-    seedDemoUsers();
+    if (demo) seedDemoUsers();
   })();
-  console.log('Seed complete.');
+  console.log(`Seed complete. (demo=${demo}, admin=${admin})`);
+}
+
+// Auto-seed on boot: fills a fresh/empty database with the verified catalog
+// so a new deployment works immediately. Idempotent - safe to run every start.
+export function seedIfEmpty({ demo = false, admin = false } = {}) {
+  const count = db.prepare('SELECT COUNT(*) c FROM gpus').get().c;
+  if (count > 0) {
+    console.log('[seed] catalog already populated - skipping auto-seed');
+    return;
+  }
+  console.log('[seed] empty database detected - auto-seeding catalog');
+  seed({ demo, admin });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
