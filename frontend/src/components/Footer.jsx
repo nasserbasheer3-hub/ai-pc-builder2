@@ -6,14 +6,11 @@ export default function Footer() {
   return (
     <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 60, padding: '34px 22px 44px' }}>
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 26 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div className="logo-tile" style={{ width: 38, height: 38 }}><img src="/logo/logo.png" alt="" /></div>
-            <b style={{ fontSize: '1.05rem' }}>LevelCore</b>
+          <div>
+            <img className="brand-logo" src="/logo/logo-lockup.webp" alt="LevelCore" style={{ width: 190 }} />
+            <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: 10, maxWidth: 260 }}>{t('footer.tagline')}</p>
+            <div style={{ marginTop: 12 }}><LanguageSwitcher compact /></div>
           </div>
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: 10, maxWidth: 260 }}>{t('footer.tagline')}</p>
-          <div style={{ marginTop: 12 }}><LanguageSwitcher compact /></div>
-        </div>
         <div>
           <div className="nav-group" style={{ textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: 1 }}>{t('footer.product')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>

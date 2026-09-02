@@ -85,11 +85,7 @@ export function Sidebar({ open, onClose }) {
   return (
     <aside className="sidebar" style={open ? { display: 'flex' } : undefined}>
       <div className="brand">
-        <div className="logo"><img src="/logo/logo.png" alt="" /></div>
-        <div>
-          <span>LevelCore</span>
-          <small>{t('nav.gamingPerformance')}</small>
-        </div>
+        <img className="brand-logo" src="/logo/logo-lockup.webp" alt="LevelCore" />
       </div>
       {NAV.map((n, i) => n.group
         ? <div key={i} className="nav-group">{t(n.group)}</div>

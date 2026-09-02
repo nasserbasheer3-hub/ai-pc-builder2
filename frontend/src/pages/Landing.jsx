@@ -100,10 +100,7 @@ export default function Landing() {
     <div className="page" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 22px' }}>
       <div className="bg-fx" /><div className="bg-grid" />
       <div className="hero">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
-          <div className="logo-tile" style={{ width: 48, height: 48 }}><img src="/logo/logo.png" alt="" /></div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>LevelCore</span>
-        </div>
+        <img src="/logo/logo-full.webp" alt="LevelCore" style={{ display: 'block', margin: '0 auto 12px', width: 'min(520px, 92vw)' }} />
         <div className="kicker">{t('landing.kicker')}</div>
         <h1>
           {t('landing.h1a')}<br />
