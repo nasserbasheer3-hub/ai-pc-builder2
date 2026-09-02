@@ -3,8 +3,6 @@ import { recomputeStreak, computeStreaks } from '../engines/insights.js';
 import { userStats, activeGameIds } from '../services/metrics.js';
 import { todayStr, daysAgoStr } from '../utils/helpers.js';
 
-const ALL = db.prepare('SELECT * FROM achievements').all();
-
 export function evaluateAchievements(userId) {
   const all = db.prepare('SELECT * FROM achievements').all();
   if (!all.length) return [];
