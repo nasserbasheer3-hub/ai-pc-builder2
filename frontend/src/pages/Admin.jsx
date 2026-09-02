@@ -24,10 +24,10 @@ function adminRequest(method, path, body) {
 const TABS = [
   ['overview', 'admin.tab.overview'], ['users', 'admin.tab.users'], ['games', 'admin.tab.games'], ['hardware', 'admin.tab.hardware'],
   ['compat', 'admin.tab.compat'], ['bench', 'admin.tab.bench'], ['blog', 'admin.tab.blog'], ['messages', 'admin.tab.messages'],
-  ['plans', 'admin.tab.plans'], ['ai', 'admin.tab.ai'], ['referrals', 'admin.tab.referrals'], ['audit', 'admin.tab.audit'],
+  ['plans', 'admin.tab.plans'], ['ai', 'admin.tab.ai'], ['steam', 'admin.tab.steam'], ['referrals', 'admin.tab.referrals'], ['audit', 'admin.tab.audit'],
 ];
 
-const TAB_ICONS = { overview: '📊', users: '👥', games: '🎮', hardware: '🗄️', compat: '✅', bench: '📈', blog: '📝', messages: '✉️', plans: '💳', ai: '🤖', referrals: '📣', audit: '📜' };
+const TAB_ICONS = { overview: '📊', users: '👥', games: '🎮', hardware: '🗄️', compat: '✅', bench: '📈', blog: '📝', messages: '✉️', plans: '💳', ai: '🤖', steam: '🟦', referrals: '📣', audit: '📜' };
 
 const HW_CATEGORIES = ['cpus', 'gpus', 'motherboards', 'ram', 'storage', 'psus', 'cases', 'coolers'];
 
@@ -82,6 +82,7 @@ export default function Admin() {
       {tab === 'messages' && <Messages />}
       {tab === 'plans' && <PlansBilling />}
       {tab === 'ai' && <AiConfig />}
+      {tab === 'steam' && <SteamAdmin />}
       {tab === 'referrals' && <Referrals />}
       {tab === 'audit' && <Audit />}
     </div>
@@ -1125,6 +1126,76 @@ function AiConfig() {
         <div className="field"><label>{t('admin.temperature')}</label><input className="input" type="number" step="0.1" min="0" max="1.5" value={form.ai_temperature || ''} onChange={(e) => setForm({ ...form, ai_temperature: e.target.value })} /></div>
         <div className="field"><label>{t('admin.maxTokens')}</label><input className="input" type="number" value={form.ai_max_tokens || ''} onChange={(e) => setForm({ ...form, ai_max_tokens: e.target.value })} /></div>
         <button className="btn btn-primary" onClick={save}>{t('admin.saveSettings')}</button>
+      </Card>
+    </div>
+  );
+}
+
+function SteamAdmin() {
+  const toast = useToast();
+  const { t } = useI18n();
+  const [data, setData] = useState(null);
+  const [enabled, setEnabled] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = () => {
+    adminRequest('GET', '/ai-config').then((r) => {
+      setData(r);
+      setEnabled(Boolean(r.steam?.enabled));
+    }).catch((e) => toast.err(e.message));
+  };
+  useEffect(() => { load(); }, []);
+  if (!data) return <LoadingBlock text={t('common.loading')} />;
+  const save = async () => {
+    setBusy(true);
+    try {
+      const settings = { steam_enabled: enabled ? '1' : '0' };
+      if (apiKey.trim()) settings.steam_api_key = apiKey.trim();
+      await adminRequest('PUT', '/ai-config', { settings });
+      toast.ok(t('admin.steamSaved'));
+      setApiKey('');
+      load();
+    } catch (e) { toast.err(e.message); }
+    finally { setBusy(false); }
+  };
+  const removeKey = async () => {
+    setBusy(true);
+    try {
+      await adminRequest('PUT', '/ai-config', { settings: { steam_api_key: '' } });
+      toast.ok(t('admin.steamSaved'));
+      load();
+    } catch (e) { toast.err(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="grid cols-2">
+      <Card>
+        <CardHead title={<>🟦 {t('admin.steamIntegration')}</>} />
+        <div className="settings-row"><span className="k">{t('admin.status')}</span>
+          <span className="v">{data.steam.keyConfigured
+            ? <Badge tone="ok">{t('admin.configured')}</Badge>
+            : <Badge tone="">{t('admin.notConfigured')}</Badge>}
+          </span>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: '0.9rem' }}>
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {t('admin.steamEnabled')}
+        </label>
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-faint)', marginBottom: 12 }}>{t('admin.steamHowTo')}</p>
+      </Card>
+      <Card>
+        <CardHead title={<>🔑 {t('admin.steamApiKey')}</>} />
+        <div className="field">
+          <label>{t('admin.steamApiKey')}</label>
+          <input className="input" type="password" autoComplete="off" value={apiKey}
+            placeholder={t('admin.steamKeyKeep')}
+            onChange={(e) => setApiKey(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={save} disabled={busy}>{t('admin.saveSettings')}</button>
+          {data.steam.keyConfigured && data.steam.source === 'database' && (
+            <button className="btn btn-ghost" onClick={removeKey} disabled={busy}>{t('admin.steamRemoveKey')}</button>
+          )}
+        </div>
       </Card>
     </div>
   );

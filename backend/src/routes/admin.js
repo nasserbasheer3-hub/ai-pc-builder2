@@ -567,20 +567,29 @@ router.get('/referrals', (req, res) => {
   ok(res, adminReferralSummary());
 });
 
-// ---- AI config ----
+// ---- AI / integration config ----
 router.get('/ai-config', (req, res) => {
   const rows = db.prepare('SELECT * FROM admin_settings').all();
   const settings = {};
-  const hide = new Set(['stripe_secret_key', 'stripe_publishable_key', 'stripe_webhook_secret']);
+  const hide = new Set(['stripe_secret_key', 'stripe_publishable_key', 'stripe_webhook_secret', 'steam_api_key']);
   for (const r of rows) {
     if (!hide.has(r.key)) settings[r.key] = r.value;
   }
+  const dbKeyRow = db.prepare("SELECT value FROM admin_settings WHERE key='steam_api_key'").get();
+  const dbKey = dbKeyRow && dbKeyRow.value && dbKeyRow.value !== '0' ? dbKeyRow.value : null;
+  const envKey = config.steam?.apiKey || '';
+  const keyConfigured = Boolean(dbKey) || Boolean(envKey);
   ok(res, {
     settings,
     env: {
       apiKeyConfigured: Boolean(config.ai.apiKey),
       baseUrl: config.ai.baseUrl,
       model: config.ai.model,
+    },
+    steam: {
+      keyConfigured,
+      source: dbKey ? 'database' : (envKey ? 'environment' : null),
+      enabled: settings.steam_enabled === '0' ? false : keyConfigured,
     },
     note: 'The API key itself is read from the backend environment (USER_LLM_API_KEY) and is never exposed to the frontend.',
   });
