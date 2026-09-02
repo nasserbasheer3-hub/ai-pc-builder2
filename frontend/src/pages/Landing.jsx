@@ -100,9 +100,9 @@ export default function Landing() {
     <div className="page" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 22px' }}>
       <div className="bg-fx" /><div className="bg-grid" />
       <div className="hero">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 10 }}>
-          <img src="/logo/logo-inverse.png" alt="LevelCore" style={{ height: 32, width: 32, objectFit: 'contain' }} />
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.2rem', letterSpacing: '-0.02em' }}>LevelCore</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 12 }}>
+          <div className="logo-tile" style={{ width: 48, height: 48 }}><img src="/logo/logo.png" alt="" /></div>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.02em' }}>LevelCore</span>
         </div>
         <div className="kicker">{t('landing.kicker')}</div>
         <h1>

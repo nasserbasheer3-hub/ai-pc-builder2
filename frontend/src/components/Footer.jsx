@@ -7,9 +7,9 @@ export default function Footer() {
     <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 60, padding: '34px 22px 44px' }}>
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 26 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo/logo-inverse.png" alt="LevelCore" style={{ height: 26, width: 26, objectFit: 'contain' }} />
-            <b>LevelCore</b>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="logo-tile" style={{ width: 38, height: 38 }}><img src="/logo/logo.png" alt="" /></div>
+            <b style={{ fontSize: '1.05rem' }}>LevelCore</b>
           </div>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: 10, maxWidth: 260 }}>{t('footer.tagline')}</p>
           <div style={{ marginTop: 12 }}><LanguageSwitcher compact /></div>
