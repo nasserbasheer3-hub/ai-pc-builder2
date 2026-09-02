@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n/index.jsx';
+import { syncConsent } from '../utils/analytics.js';
 
 const KEY = 'gpp_cookie_consent';
 
@@ -11,11 +12,16 @@ export default function CookieConsent() {
   useEffect(() => {
     try {
       if (!localStorage.getItem(KEY)) setVisible(true);
+      else syncConsent();
     } catch { /* ignore */ }
   }, []);
 
   const decide = (value) => {
     try { localStorage.setItem(KEY, value); } catch { /* ignore */ }
+    syncConsent();
+    if (value === 'accepted' && typeof window.gtag === 'function') {
+      window.gtag('event', 'consent_accepted');
+    }
     setVisible(false);
   };
 

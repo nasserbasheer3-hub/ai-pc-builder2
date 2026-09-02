@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import { LanguageSwitcher } from '../i18n/index.jsx';
 import { api } from '../api/client.js';
+import { track } from '../utils/analytics.js';
 
 const FEATURES = [
   { icon: '🎮', tKey: 'f1', dKey: 'f1d' },
@@ -107,11 +108,11 @@ export default function Landing() {
         <p>{t('landing.sub')}</p>
         <div className="pill-row" style={{ marginTop: 10 }}>
           {user ? (
-            <Link to="/dashboard" className="btn btn-primary btn-lg">{t('landing.openDashboard')}</Link>
+            <Link to="/dashboard" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'open_dashboard' })}>{t('landing.openDashboard')}</Link>
           ) : (
             <>
-              <Link to="/signup" className="btn btn-primary btn-lg">{t('landing.createFreeAccount')}</Link>
-              <Link to="/login" className="btn btn-ghost btn-lg">{t('landing.signIn')}</Link>
+              <Link to="/signup" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'signup_hero' })}>{t('landing.createFreeAccount')}</Link>
+              <Link to="/login" className="btn btn-ghost btn-lg" onClick={() => track('cta_click', { action: 'login_hero' })}>{t('landing.signIn')}</Link>
             </>
           )}
         </div>
@@ -176,7 +177,7 @@ export default function Landing() {
       <div className="card" style={{ marginTop: 40, padding: 26, textAlign: 'center' }}>
         <h2>{t('landing.aiCtaTitle')}</h2>
         <p style={{ margin: '10px 0 20px', fontSize: '0.92rem' }}>{t('landing.aiCtaSub')}</p>
-        {!user && <Link to="/signup" className="btn btn-primary btn-lg">{t('landing.startImproving')}</Link>}
+        {!user && <Link to="/signup" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'signup_bottom' })}>{t('landing.startImproving')}</Link>}
       </div>
       <div className="footer-note">{t('landing.footerNote')}</div>
     </div>

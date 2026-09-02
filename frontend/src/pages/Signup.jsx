@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import { AuthShell } from './Login.jsx';
 import { getDeviceId } from '../utils/device.js';
+import { track } from '../utils/analytics.js';
 
 export default function Signup() {
   const { register } = useAuth();
@@ -22,13 +23,13 @@ export default function Signup() {
     if (form.password.length < 8) return setError(t('auth.passwordMin8'));
     setBusy(true);
     try {
-      await register({
+      await       register({
         username: form.username,
         email: form.email,
         password: form.password,
         referralCode: form.referralCode?.trim() || undefined,
         deviceId: getDeviceId(),
-      });
+      }).then(() => track('sign_up', { method: 'email' }));
       navigate('/onboarding');
     } catch (err) {
       setError(err.message);

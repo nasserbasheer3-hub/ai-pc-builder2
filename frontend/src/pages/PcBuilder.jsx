@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { getGames } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, DataTag, Spinner, EmptyState, useToast, LoadingBlock } from '../components/ui.jsx';
+import { track } from '../utils/analytics.js';
 
 const CATEGORIES = [
   ['cpu', 'pccomp.cpu'], ['gpu', 'pccomp.gpu'], ['motherboard', 'pccomp.motherboard'], ['ram', 'pccomp.memory'],
@@ -33,6 +34,7 @@ export default function PcBuilder() {
 
   const build = async () => {
     if (budget < 300) return toast.err(t('pcbuilder.budgetMin'));
+    track('generate_build', { budget: Number(budget), currency, resolution });
     setBuilding(true);
     setResult(null);
     try {

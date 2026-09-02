@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, useToast, LoadingBlock, EmptyState } from '../components/ui.jsx';
+import { track } from '../utils/analytics.js';
 
 function fmtHours(min) {
   if (!min) return '0h';
@@ -35,6 +36,7 @@ export default function Steam() {
   useEffect(() => { loadAll(); }, []);
 
   const link = async () => {
+    track('steam_connect', { action: 'link' });
     setBusy(true);
     try {
       const r = await api.post('/steam/link', { steamId });
@@ -47,6 +49,7 @@ export default function Steam() {
   };
 
   const sync = async () => {
+    track('steam_connect', { action: 'sync' });
     setBusy(true);
     try {
       const r = await api.post('/steam/sync');

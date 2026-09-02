@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import { api, ApiError } from '../api/client.js';
 import { Card, Badge, useToast, LoadingBlock } from '../components/ui.jsx';
+import { track } from '../utils/analytics.js';
 
 const METHODS = [
   { id: 'card', labelKey: 'pricing.card' },
@@ -53,10 +54,10 @@ export default function Pricing() {
       try {
         if (paymentId) {
           const res = await api.get(`/billing/checkout/${paymentId}`);
-          if (res.payment?.status === 'paid') toast.ok(t('pricing.paid'));
+          if (res.payment?.status === 'paid') { toast.ok(t('pricing.paid')); track('checkout_completed', { status: 'paid' }); }
           else if (checkout === 'cancel') toast.err(t('pricing.checkoutCancel'));
-          else toast.ok(t('pricing.checkoutPending'));
-        } else if (checkout === 'success') toast.ok(t('pricing.paid'));
+          else { toast.ok(t('pricing.checkoutPending')); track('checkout_completed', { status: 'pending' }); }
+        } else if (checkout === 'success') { toast.ok(t('pricing.paid')); track('checkout_completed', { status: 'paid' }); }
         else toast.err(t('pricing.checkoutCancel'));
         await refreshMe();
       } catch (e) {
@@ -68,8 +69,9 @@ export default function Pricing() {
   }, [user]);
 
   const subscribe = async (plan) => {
-    if (!user) { navigate('/signup'); return; }
+    if (!user) { track('cta_click', { action: 'subscribe_requires_login' }); navigate('/signup'); return; }
     if (plan.is_free) { toast.ok(t('pricing.alreadyFree')); return; }
+    track('begin_checkout', { plan_id: plan.id, plan_name: plan.name, value: Number(plan.price_sek) || 0, currency: 'SEK' });
     setBusy(plan.id);
     try {
       const body = { planId: plan.id, method: chosenMethod || 'card' };

@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { getGames, getHardwareCategory } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, DataTag, Spinner, EmptyState, ProgressBar, useToast } from '../components/ui.jsx';
+import { track } from '../utils/analytics.js';
 
 const QUALITIES = ['Low', 'Medium', 'High', 'Ultra', 'Epic'];
 const RESOLUTIONS = ['1080p', '1440p', '4K'];
@@ -26,6 +27,7 @@ export default function PcFps() {
 
   const run = async () => {
     if (!form.game_id || !form.gpu_id) return toast.err(t('pcfps.gameGpuRequired'));
+    track('fps_calculate', { resolution: form.resolution, quality: form.quality });
     setRunning(true);
     setCalc(null);
     try {
