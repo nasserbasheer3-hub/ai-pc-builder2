@@ -5,6 +5,7 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/.env
+backend/.env.example
 
 # Frontend
 frontend/node_modules/

@@ -1342,6 +1342,7 @@ export default {
   "pricing.demoPaid": "Plan activated. Credits added to your wallet.",
   "pricing.paid": "Plan activated. Credits added to your wallet.",
   "pricing.paymentUnavailable": "Live payment is not configured yet. Ask an administrator to add Stripe keys.",
+"pricing.demoNotice": "Live payments are disabled, so subscriptions are activated instantly in demo mode (no real charge).",
   "pricing.costsNote": "Chat, coach, weekly reports and AI explanations spend credits. If a call fails, credits are refunded.",
   "pricing.needCredits": "Not enough AI credits. Upgrade your plan to continue.",
   "pricing.payWith": "Pay with",

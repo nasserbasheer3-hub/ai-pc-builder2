@@ -153,9 +153,11 @@ export default function Pricing() {
           />
         </div>
       )}
-      {!data.stripeConfigured && (
+      {data.demoEnabled ? (
+        <p className="pricing-note pricing-warn">{t('pricing.demoNotice')}</p>
+      ) : !data.stripeConfigured ? (
         <p className="pricing-note pricing-warn">{t('pricing.paymentUnavailable')}</p>
-      )}
+      ) : null}
       <div className="pricing-grid">
         {(data.plans || []).map((p) => {
           const current = currentSlug === p.slug;

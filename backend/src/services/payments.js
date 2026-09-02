@@ -173,8 +173,10 @@ export async function createCheckout({ user, plan, method, offer, origin, referr
   const paymentId = pay.lastInsertRowid;
 
   if (priced.amount === 0) {
-    db.prepare(`UPDATE payments SET status = 'paid', paid_at = ?, provider_ref = ? WHERE id = ?`)
-      .run(now(), `free_offer_${paymentId}`, paymentId);
+    // Free offer: stamp the provider ref first, then fulfil - fulfil() marks it
+    // paid AND activates the plan + grants credits (order matters).
+    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`)
+      .run(`free_offer_${paymentId}`, paymentId);
     fulfillPayment(paymentId);
     return {
       mode: 'activated',
@@ -185,6 +187,23 @@ export async function createCheckout({ user, plan, method, offer, origin, referr
   }
 
   const stripe = getStripe();
+  const demo = String(getSetting('payment_demo', '0')) !== '0';
+  if (!stripe && demo) {
+    // Demo gateway (payment_demo=1): simulate a successful payment so plan
+    // upgrades and credit grants can be tested without Stripe keys. Every
+    // payment is honestly stamped with a demo_* provider reference.
+    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`)
+      .run(`demo_${paymentId}`, paymentId);
+    fulfillPayment(paymentId);
+    return {
+      mode: 'activated',
+      paymentId,
+      subscription: getActivePlan(user.id),
+      wallet: getWallet(user.id),
+      demo: true,
+    };
+  }
+
   if (!stripe) {
     db.prepare(`UPDATE payments SET status = 'requires_gateway', error = ? WHERE id = ?`)
       .run('Stripe keys are not configured. Set STRIPE_SECRET_KEY in the backend environment.', paymentId);

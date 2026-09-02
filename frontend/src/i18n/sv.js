@@ -1342,6 +1342,7 @@ export default {
   "pricing.demoPaid": "Planen aktiverad. Krediter har lagts till.",
   "pricing.paid": "Planen aktiverad. Krediter har lagts till.",
   "pricing.paymentUnavailable": "Livebetalning är inte konfigurerad ännu. Be en administratör att lägga till Stripe-nycklar.",
+"pricing.demoNotice": "Live-betalningar är avstängda, så prenumerationer aktiveras direkt i demoläge (ingen riktig avgift).",
   "pricing.costsNote": "Chatt, coach, veckorapporter och AI-förklaringar drar krediter. Misslyckade anrop återbetalas.",
   "pricing.needCredits": "Inte tillräckligt med AI-krediter. Uppgradera planen för att fortsätta.",
   "pricing.payWith": "Betala med",

@@ -43,6 +43,7 @@ router.get('/plans', (req, res) => {
     currency: 'SEK',
     paymentMethods: String(getSetting('payment_methods', 'card,swish,klarna')).split(',').map((s) => s.trim()).filter(Boolean),
     stripeConfigured: isStripeConfigured(),
+    demoEnabled: String(getSetting('payment_demo', '0')) !== '0' && !isStripeConfigured(),
     publishableKey: isStripeConfigured() ? (stripeKeys().publishable || '') : '',
   });
 });
