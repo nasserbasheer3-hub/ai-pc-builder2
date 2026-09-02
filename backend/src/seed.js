@@ -374,14 +374,29 @@ export function seed({ demo = true, admin = true } = {}) {
 
 // Auto-seed on boot: fills a fresh/empty database with the verified catalog
 // so a new deployment works immediately. Idempotent - safe to run every start.
+// Returns true when the database was seeded from scratch (empty before boot).
 export function seedIfEmpty({ demo = false, admin = false } = {}) {
   const count = db.prepare('SELECT COUNT(*) c FROM gpus').get().c;
   if (count > 0) {
     console.log('[seed] catalog already populated - skipping auto-seed');
-    return;
+    return false;
   }
   console.log('[seed] empty database detected - auto-seeding catalog');
   seed({ demo, admin });
+  return true;
+}
+
+// Additive catalog sync: run on every boot against an existing database so that
+// newly added verified items from the built-in catalog (seed-data.js) reach
+// production on deploy. Insert-only by name - never overwrites admin edits,
+// disables rows, or duplicates. Cheap (<1s) and safe to run every start.
+export function syncCatalog() {
+  console.log('[seed] syncing built-in catalog (additive) ...');
+  db.transaction(() => {
+    seedHardware();
+    seedRules();
+  })();
+  console.log('[seed] catalog sync complete');
 }
 
 // Create the admin account on boot when the operator explicitly provided an

@@ -33,7 +33,7 @@ import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
-import { seedIfEmpty, ensureAdmin, issueAdminSetupToken } from './seed.js';
+import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
 import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled } from './services/payments.js';
 
@@ -42,7 +42,9 @@ ensureBillingDefaults();
 // Auto-seed a fresh/empty database on boot (production-safe: no demo users,
 // admin only created when an ADMIN_PASSWORD env is explicitly provided).
 try {
-  seedIfEmpty({ demo: false, admin: false });
+  const seededFromEmpty = seedIfEmpty({ demo: false, admin: false });
+  // Existing database: additively import any newly added built-in catalog items.
+  if (!seededFromEmpty) syncCatalog();
   if (process.env.ADMIN_PASSWORD) ensureAdmin();
 } catch (e) {
   console.error('[seed] auto-seed failed:', e.message);
