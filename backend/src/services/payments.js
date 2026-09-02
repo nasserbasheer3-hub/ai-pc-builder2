@@ -36,6 +36,23 @@ export function isWebhookConfigured() {
   return looksLikeKey(stripeKeys().webhook, 'whsec_');
 }
 
+// Demo payments ("activate plan + grant credits without a real charge") must be
+// switched on EXPLICITLY by the operator (PAYMENT_DEMO=1). Without that env var
+// a paid plan can never be granted for free - not even when Stripe keys are
+// missing - so a public deployment can never hand out credits without payment.
+export function demoPaymentsEnabled() {
+  return process.env.PAYMENT_DEMO === '1';
+}
+
+// Payment methods the live gateway can actually process. Stripe Checkout does
+// not support Swish at all, so the default is card only. Klarna can be added
+// here later once a merchant account has it activated.
+export function supportedPaymentMethods() {
+  const raw = String(getSetting('payment_methods', 'card')).split(',').map((s) => s.trim()).filter(Boolean);
+  const out = raw.filter((m) => m === 'card');
+  return out.length ? out : ['card'];
+}
+
 export function resetStripeClient() {
   stripeClient = null;
   stripeClientKey = '';
@@ -187,10 +204,9 @@ export async function createCheckout({ user, plan, method, offer, origin, referr
   }
 
   const stripe = getStripe();
-  const demo = String(getSetting('payment_demo', '0')) !== '0';
-  if (!stripe && demo) {
-    // Demo gateway (payment_demo=1): simulate a successful payment so plan
-    // upgrades and credit grants can be tested without Stripe keys. Every
+  if (!stripe && demoPaymentsEnabled()) {
+    // Explicit PAYMENT_DEMO=1 demo gateway: simulate a successful payment so
+    // plan upgrades and credit grants can be tested without Stripe keys. Every
     // payment is honestly stamped with a demo_* provider reference.
     db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`)
       .run(`demo_${paymentId}`, paymentId);

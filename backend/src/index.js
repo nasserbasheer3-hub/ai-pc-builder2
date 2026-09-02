@@ -33,7 +33,7 @@ import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
 import { seedIfEmpty, ensureAdmin } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
-import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured } from './services/payments.js';
+import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled } from './services/payments.js';
 
 migrate();
 ensureBillingDefaults();
@@ -44,6 +44,22 @@ try {
   if (process.env.ADMIN_PASSWORD) ensureAdmin();
 } catch (e) {
   console.error('[seed] auto-seed failed:', e.message);
+}
+
+// Boot diagnostics: clearly report which integrations are configured so an
+// operator (or this assistant, remotely) can see what is still missing.
+console.log(`[setup] database: ${config.dbPath}${config.dbPath === path.resolve(process.cwd(), 'data/gaming_platform.db') ? ' (EPHEMERAL - data is lost on redeploy unless DATABASE_PATH points at a persistent disk)' : ' (persistent)'}`);
+console.log(`[setup] stripe:   ${isStripeConfigured() ? 'configured' : 'NOT configured - paid plans are blocked until STRIPE_SECRET_KEY/PUBLISHABLE are set'}`);
+console.log(`[setup] webhook:  ${isWebhookConfigured() ? 'configured' : 'not configured (STRIPE_WEBHOOK_SECRET) - still works via redirect, but webhooks recommended'}`);
+console.log(`[setup] demo pay: ${demoPaymentsEnabled() ? 'ENABLED (PAYMENT_DEMO=1) - plan upgrades grant credits without real payment' : 'disabled'}`);
+console.log(`[setup] ai:       ${config.ai.apiKey ? `configured (${config.ai.model})` : 'NOT configured - AI chat/coach disabled until USER_LLM_API_KEY is set'}`);
+console.log(`[setup] mail:     ${config.email.smtpHost ? 'configured' : 'NOT configured (SMTP_HOST/USER/PASS) - email links are not delivered'}`);
+console.log(`[setup] admin:    ${process.env.ADMIN_PASSWORD ? `will be ensured: ${config.admin.email}` : 'NOT configured (ADMIN_PASSWORD env) - /admin/login has no account'}`);
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-insecure-jwt-secret-change-me') {
+  console.warn('[setup] WARNING: JWT_SECRET is the public default - user sessions can be forged. Set a random JWT_SECRET env var.');
+}
+if (!process.env.JWT_ADMIN_SECRET || process.env.JWT_ADMIN_SECRET === 'dev-insecure-admin-jwt-secret-change-me') {
+  console.warn('[setup] WARNING: JWT_ADMIN_SECRET is the public default - admin sessions can be forged. Set a random JWT_ADMIN_SECRET env var.');
 }
 
 const app = express();
@@ -84,6 +100,29 @@ const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: t
 app.use('/api', apiLimiter);
 
 app.get('/api/health', (req, res) => res.json({ ok: true, status: 'healthy', time: new Date().toISOString() }));
+
+// Read-only deployment diagnostics (no secrets - only booleans/masks) so an
+// operator can confirm which integrations are active.
+app.get('/api/setup/status', (req, res) => {
+  const keys = stripeKeys();
+  res.json({
+    ok: true,
+    data: {
+      env: config.nodeEnv,
+      appUrl: config.appUrl,
+      persistentDb: config.dbPath !== path.resolve(process.cwd(), 'data/gaming_platform.db'),
+      stripeConfigured: isStripeConfigured(),
+      stripeKeyMasked: isStripeConfigured() ? `${keys.secret.slice(0, 7)}...${keys.secret.slice(-4)}` : '',
+      webhookConfigured: isWebhookConfigured(),
+      demoEnabled: demoPaymentsEnabled(),
+      aiEnabled: Boolean(config.ai.apiKey),
+      aiModel: config.ai.apiKey ? config.ai.model : '',
+      mailConfigured: Boolean(config.email.smtpHost),
+      adminConfigured: Boolean(process.env.ADMIN_PASSWORD),
+      adminEmail: process.env.ADMIN_PASSWORD ? config.admin.email : '',
+    },
+  });
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');

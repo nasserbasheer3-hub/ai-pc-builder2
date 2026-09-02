@@ -258,9 +258,8 @@ function seedAdminSettings() {
     credit_cost_plan: '10',
     credit_cost_ai_builder_prompt: '4',
     credit_cost_default: '3',
-    payment_demo: '1',
-    swish_number: '123 456 78 90',
-    payment_methods: 'card,swish,klarna',
+    payment_demo: '0',
+    payment_methods: 'card',
   };
   const insertIgnore = db.prepare('INSERT INTO admin_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING');
   for (const [k, v] of Object.entries(billingDefaults)) insertIgnore.run(k, v);

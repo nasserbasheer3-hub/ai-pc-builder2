@@ -6,6 +6,7 @@ import { ensureFreePlan, getActivePlan, getWallet, listLedger, creditCosts } fro
 import {
   listActivePlans, findOffer, applyOffer, parseFeatures, getSetting, bestAutoOffer,
   createCheckout, fulfillPayment, isStripeConfigured, getStripe, stripeKeys,
+  demoPaymentsEnabled, supportedPaymentMethods,
 } from '../services/payments.js';
 import { config } from '../config.js';
 import { referralDiscountFor, referralStatsFor, referralEnabled } from '../services/referrals.js';
@@ -41,9 +42,9 @@ router.get('/plans', (req, res) => {
     plans,
     costs: creditCosts(),
     currency: 'SEK',
-    paymentMethods: String(getSetting('payment_methods', 'card,swish,klarna')).split(',').map((s) => s.trim()).filter(Boolean),
+    paymentMethods: supportedPaymentMethods(),
     stripeConfigured: isStripeConfigured(),
-    demoEnabled: String(getSetting('payment_demo', '0')) !== '0' && !isStripeConfigured(),
+    demoEnabled: demoPaymentsEnabled() && !isStripeConfigured(),
     publishableKey: isStripeConfigured() ? (stripeKeys().publishable || '') : '',
   });
 });
@@ -83,9 +84,9 @@ router.get('/referral', requireAuth, (req, res) => {
 router.post('/subscribe', requireAuth, async (req, res) => {
   const planId = parseId(req.body?.planId);
   const method = String(req.body?.method || 'card').toLowerCase();
-  const allowed = new Set(['card', 'swish', 'klarna']);
+  const allowed = new Set(supportedPaymentMethods());
   if (!planId) return fail(res, 400, 'VALIDATION', 'Choose a plan.');
-  if (!allowed.has(method)) return fail(res, 400, 'VALIDATION', 'Choose a payment method: card, Swish or Klarna.');
+  if (!allowed.has(method)) return fail(res, 400, 'VALIDATION', `Choose a supported payment method: ${[...allowed].join(', ')}.`);
 
   const plan = db.prepare('SELECT * FROM plans WHERE id = ? AND is_active = 1').get(planId);
   if (!plan) return fail(res, 404, 'NOT_FOUND', 'Plan not found.');

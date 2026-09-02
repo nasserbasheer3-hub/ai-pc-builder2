@@ -71,7 +71,7 @@ export default function Pricing() {
     if (plan.is_free) { toast.ok(t('pricing.alreadyFree')); return; }
     setBusy(plan.id);
     try {
-      const body = { planId: plan.id, method };
+      const body = { planId: plan.id, method: chosenMethod || 'card' };
       if (offerCode.trim()) body.offerCode = offerCode.trim();
       const res = await api.post('/billing/subscribe', body);
       if (res.mode === 'checkout' && res.url) {
@@ -118,6 +118,9 @@ export default function Pricing() {
 
   const currentSlug = me?.subscription?.slug;
   const paidPayments = (me?.payments || []).filter((p) => p.status === 'paid');
+  const serverMethods = (data.paymentMethods && data.paymentMethods.length ? data.paymentMethods : ['card']);
+  const availableMethods = METHODS.filter((m) => serverMethods.includes(m.id));
+  const chosenMethod = availableMethods.some((m) => m.id === method) ? method : (availableMethods[0]?.id || 'card');
 
   return (
     <div className="page pricing-page">
@@ -134,8 +137,8 @@ export default function Pricing() {
       <div className="pricing-pay-methods">
         <span className="pricing-pay-label">{t('pricing.payWith')}</span>
         <div className="chip-row">
-          {METHODS.map((m) => (
-            <button key={m.id} type="button" className={`chip ${method === m.id ? 'chip-on' : ''}`} onClick={() => setMethod(m.id)}>
+          {availableMethods.map((m) => (
+            <button key={m.id} type="button" className={`chip ${chosenMethod === m.id ? 'chip-on' : ''}`} onClick={() => setMethod(m.id)}>
               {t(m.labelKey)}
             </button>
           ))}
