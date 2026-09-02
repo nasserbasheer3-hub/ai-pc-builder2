@@ -62,7 +62,7 @@ export function AuthShell({ children }) {
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 32 }}>
         <Link to="/" style={{ textDecoration: 'none' }}>
           <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <div className="logo" style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-grad)', display: 'grid', placeItems: 'center', fontWeight: 700, fontFamily: 'var(--font-display)', color: '#fff' }}>&gt;_</div>
+            <div className="logo" style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--primary-grad)', display: 'grid', placeItems: 'center', color: '#fff', overflow: 'hidden' }}><img src="/logo/logo-inverse.png" alt="LevelCore" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 6, boxSizing: 'border-box', display: 'block' }} /></div>
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)' }}>LevelCore</span>
           </div>
         </Link>

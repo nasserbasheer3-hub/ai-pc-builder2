@@ -8,7 +8,7 @@ export default function Footer() {
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 26 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="logo">&gt;_</div>
+            <img src="/logo/logo-inverse.png" alt="LevelCore" style={{ height: 26, width: 26, objectFit: 'contain' }} />
             <b>LevelCore</b>
           </div>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: 10, maxWidth: 260 }}>{t('footer.tagline')}</p>
