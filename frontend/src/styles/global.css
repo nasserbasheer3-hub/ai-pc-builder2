@@ -448,6 +448,10 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4 {
   margin: 0 0 18px;
   max-width: 720px;
 }
+.pricing-plan-card { margin-bottom: 18px; }
+.pricing-plan-card h3 { margin: 0 0 8px; font-size: 1rem; }
+.pricing-plan-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pricing-plan-row p { margin: 4px 0 0; color: var(--text-dim); font-size: 0.85rem; }
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

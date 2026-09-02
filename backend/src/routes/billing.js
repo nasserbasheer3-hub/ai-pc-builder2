@@ -7,6 +7,8 @@ import {
   listActivePlans, findOffer, applyOffer, parseFeatures, getSetting, bestAutoOffer,
   createCheckout, fulfillPayment, isStripeConfigured, getStripe, stripeKeys,
   demoPaymentsEnabled, supportedPaymentMethods,
+  syncStripeSubscription, cancelStripeSubscriptionNow, reactivateStripeSubscription,
+  cancelScheduledSubscription,
 } from '../services/payments.js';
 import { config } from '../config.js';
 import { referralDiscountFor, referralStatsFor, referralEnabled } from '../services/referrals.js';
@@ -59,7 +61,13 @@ router.get('/me', requireAuth, (req, res) => {
       lifetimeGranted: wallet.lifetime_granted,
       lifetimeSpent: wallet.lifetime_spent,
     },
-    subscription,
+    subscription: subscription
+      ? {
+          ...subscription,
+          isRecurring: Boolean(subscription.stripe_subscription_id),
+          cancelAtPeriodEnd: Boolean(subscription.cancelled_at),
+        }
+      : null,
     costs: creditCosts(),
     plans: listActivePlans(),
     ledger: listLedger(req.user.id, 20),
@@ -91,13 +99,42 @@ router.post('/subscribe', requireAuth, async (req, res) => {
   const plan = db.prepare('SELECT * FROM plans WHERE id = ? AND is_active = 1').get(planId);
   if (!plan) return fail(res, 404, 'NOT_FOUND', 'Plan not found.');
   if (plan.is_free) {
+    const existing = getActivePlan(req.user.id);
+    if (existing && !existing.is_free) {
+      return fail(res, 409, 'CANCEL_FIRST', 'Cancel your current subscription first, then switch back to Free.');
+    }
     ensureFreePlan(req.user.id);
     return ok(res, { subscription: getActivePlan(req.user.id), wallet: getWallet(req.user.id), mode: 'free' });
   }
 
   const current = getActivePlan(req.user.id);
-  if (current && current.plan_id === plan.id && current.status === 'active' && !current.is_free) {
-    return fail(res, 409, 'ALREADY_SUBSCRIBED', 'You already have this plan.');
+  const samePlan = current && !current.is_free && Number(current.plan_id) === Number(plan.id);
+  const isRecurring = Boolean(current && current.stripe_subscription_id);
+
+  if (current && !current.is_free && isRecurring) {
+    if (samePlan) {
+      if (!current.cancelled_at) {
+        return fail(res, 409, 'ALREADY_SUBSCRIBED', 'You already have this subscription. It renews automatically every month.');
+      }
+      // Resuming a subscription that was scheduled to cancel at the period end.
+      try {
+        await reactivateStripeSubscription(current.stripe_subscription_id);
+        db.prepare(`UPDATE subscriptions SET cancelled_at = NULL, updated_at = ? WHERE id = ?`).run(now(), current.id);
+      } catch (e) {
+        console.error('[billing.resume]', e.message);
+        return fail(res, 502, 'RESUME_FAILED', 'Could not resume your subscription. Please try again.');
+      }
+      return ok(res, { subscription: getActivePlan(req.user.id), wallet: getWallet(req.user.id), mode: 'resumed' });
+    }
+    // Switching to a different plan: stop the current Stripe subscription now
+    // (Stripe prorates the unused time to the customer balance, which offsets
+    // the first invoice of the new subscription) before opening the new one.
+    try {
+      await cancelStripeSubscriptionNow(current.stripe_subscription_id);
+    } catch (e) {
+      console.error('[billing.switch.cancel]', e.message);
+      return fail(res, 502, 'SWITCH_FAILED', 'Could not switch plans right now. Please try again.');
+    }
   }
 
   const coded = req.body?.offerCode || req.body?.offerId;
@@ -136,7 +173,17 @@ router.get('/checkout/:id', requireAuth, async (req, res) => {
   if (payment.status === 'pending' && payment.checkout_session_id && getStripe()) {
     try {
       const session = await getStripe().checkout.sessions.retrieve(payment.checkout_session_id);
-      if (session.payment_status === 'paid' || session.status === 'complete') {
+      if (session.mode === 'subscription') {
+        if (session.payment_status === 'paid' || session.status === 'complete') {
+          if (session.subscription) {
+            await syncStripeSubscription({ stripeSubscriptionId: session.subscription, session });
+          } else {
+            fulfillPayment(payment.id);
+          }
+        } else if (session.status === 'expired') {
+          db.prepare(`UPDATE payments SET status = 'failed', error = ? WHERE id = ?`).run('checkout_expired', payment.id);
+        }
+      } else if (session.payment_status === 'paid' || session.status === 'complete') {
         fulfillPayment(payment.id);
       } else if (session.status === 'expired') {
         db.prepare(`UPDATE payments SET status = 'failed', error = ? WHERE id = ?`).run('checkout_expired', payment.id);
@@ -152,9 +199,26 @@ router.get('/checkout/:id', requireAuth, async (req, res) => {
   });
 });
 
-router.post('/cancel', requireAuth, (req, res) => {
+router.post('/cancel', requireAuth, async (req, res) => {
   const current = getActivePlan(req.user.id);
   if (!current || current.is_free) return fail(res, 400, 'NO_PAID_PLAN', 'You do not have a paid plan to cancel.');
+
+  if (current.stripe_subscription_id) {
+    // Recurring subscription: stop future renewals, keep access until the
+    // period ends, and let Stripe downgrade us when the subscription is gone.
+    const stripe = getStripe();
+    if (!stripe) return fail(res, 503, 'PAYMENT_UNAVAILABLE', 'Stripe is not configured.');
+    try {
+      await stripe.subscriptions.update(current.stripe_subscription_id, { cancel_at_period_end: true });
+      cancelScheduledSubscription(current);
+    } catch (e) {
+      console.error('[billing.cancel]', e.message);
+      return fail(res, 502, 'CANCEL_FAILED', 'Could not cancel the subscription right now. Please try again.');
+    }
+    return ok(res, { subscription: getActivePlan(req.user.id), wallet: getWallet(req.user.id), cancelAtPeriodEnd: true });
+  }
+
+  // Legacy one-time paid plan: cancel immediately.
   db.prepare(`UPDATE subscriptions SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?`)
     .run(now(), now(), current.id);
   ensureFreePlan(req.user.id);

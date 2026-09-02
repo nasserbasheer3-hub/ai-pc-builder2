@@ -22,6 +22,7 @@ export default function Pricing() {
   const [method, setMethod] = useState('card');
   const [offerCode, setOfferCode] = useState('');
   const [busy, setBusy] = useState(null);
+  const [manageBusy, setManageBusy] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [refunding, setRefunding] = useState(null);
 
@@ -79,7 +80,8 @@ export default function Pricing() {
         return;
       }
       setMe({ ...me, subscription: res.subscription, wallet: res.wallet });
-      toast.ok(t('pricing.paid'));
+      if (res.mode === 'resumed') toast.ok(t('billing.resumed'));
+      else toast.ok(t('pricing.paid'));
     } catch (e) {
       if (e instanceof ApiError && e.code === 'PAYMENT_UNAVAILABLE') toast.err(t('pricing.paymentUnavailable'));
       else toast.err(e.message);
@@ -99,6 +101,31 @@ export default function Pricing() {
     } finally {
       setRefunding(null);
     }
+  };
+
+  const managePlan = async () => {
+    const sub = me?.subscription;
+    if (!sub || !sub.isRecurring || manageBusy) return;
+    setManageBusy(true);
+    try {
+      if (sub.cancelAtPeriodEnd) {
+        await api.post('/billing/subscribe', { planId: sub.plan_id, method: 'card' });
+        toast.ok(t('billing.resumed'));
+      } else {
+        await api.post('/billing/cancel');
+        toast.ok(t('billing.cancelScheduled'));
+      }
+      await refreshMe();
+    } catch (e) {
+      toast.err(e.message);
+    } finally {
+      setManageBusy(false);
+    }
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleDateString(); } catch { return String(iso).slice(0, 10); }
   };
 
   if (loadError && !data) {
@@ -161,6 +188,35 @@ export default function Pricing() {
       ) : !data.stripeConfigured ? (
         <p className="pricing-note pricing-warn">{t('pricing.paymentUnavailable')}</p>
       ) : null}
+      {user && me?.subscription && !me.subscription.is_free && (
+        <Card className="pricing-plan-card">
+          <h3>{t('billing.mySubscription')}</h3>
+          <div className="pricing-plan-row">
+            <div>
+              <b>{me.subscription.plan_name}</b>
+              {me.subscription.isRecurring ? (
+                <p>
+                  {me.subscription.cancelAtPeriodEnd
+                    ? t('billing.cancelsOn', { date: fmtDate(me.subscription.current_period_end) })
+                    : t('billing.renewsOn', { date: fmtDate(me.subscription.current_period_end) })}
+                </p>
+              ) : (
+                <p>{t('billing.activeUntil', { date: fmtDate(me.subscription.current_period_end) })}</p>
+              )}
+            </div>
+            {me.subscription.isRecurring && (
+              <button
+                type="button"
+                className={`btn btn-sm ${me.subscription.cancelAtPeriodEnd ? 'btn-primary' : 'btn-ghost'}`}
+                disabled={manageBusy}
+                onClick={managePlan}
+              >
+                {me.subscription.cancelAtPeriodEnd ? t('billing.resumePlan') : t('billing.cancelPlan')}
+              </button>
+            )}
+          </div>
+        </Card>
+      )}
       <div className="pricing-grid">
         {(data.plans || []).map((p) => {
           const current = currentSlug === p.slug;

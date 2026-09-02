@@ -75,6 +75,9 @@ export function maskSecret(value) {
   return `${k.slice(0, 7)}…${k.slice(-4)}`;
 }
 
+const sekToMinor = (sek) => Math.max(0, Math.round((Number(sek) || 0) * 100));
+const epochToIso = (s) => new Date((Number(s) || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+
 export function parseFeatures(row) {
   let features = [];
   try { features = JSON.parse(row.features_json || '[]'); } catch { features = []; }
@@ -141,6 +144,450 @@ export function paymentMethodTypes(method) {
   return ['card'];
 }
 
+// ---------------------------------------------------------------------------
+// Recurring (Stripe Subscription) support.
+//
+// A paid plan is a MONTHLY RECURRING subscription. Checkout is created in
+// Stripe `mode: 'subscription'` against a cached recurring Price per plan.
+// The user's card is charged once a month; every paid invoice grants the
+// plan's monthly credits once and extends the active period. All money facts
+// (amounts, periods) are taken from Stripe (invoice/session objects), never
+// guessed, and each paid invoice maps to exactly one payments row so nothing
+// is granted twice.
+// ---------------------------------------------------------------------------
+
+function upsertSetting(key, value) {
+  db.prepare(`
+    INSERT INTO admin_settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, String(value));
+}
+
+// Return the cached Stripe monthly Price id for a plan, creating it (product +
+// recurring price) the first time that price point is needed.
+async function ensureRecurringPrice(plan) {
+  const amount = Math.trunc(Number(plan.price_sek) || 0);
+  const cached = db.prepare(`
+    SELECT stripe_price_id FROM stripe_prices
+    WHERE plan_id = ? AND billing_interval = 'month' AND currency = 'SEK' AND amount_sek = ?
+  `).get(plan.id, amount);
+  if (cached) return cached.stripe_price_id;
+
+  const stripe = getStripe();
+  if (!stripe) {
+    const err = new Error('Live payment is not configured yet. Ask an administrator to add Stripe keys.');
+    err.code = 'PAYMENT_UNAVAILABLE';
+    err.status = 503;
+    throw err;
+  }
+
+  let product;
+  const existing = await stripe.products.list({ limit: 100, active: true });
+  product = existing.data.find((p) => String(p.metadata?.plan_id) === String(plan.id));
+  if (!product) {
+    product = await stripe.products.create({
+      name: `${plan.name} plan`,
+      description: plan.tagline || `${plan.monthly_credits} AI credits / month`,
+      metadata: { plan_id: String(plan.id) },
+    });
+  }
+  const price = await stripe.prices.create({
+    product: product.id,
+    currency: 'sek',
+    unit_amount: sekToMinor(amount),
+    recurring: { interval: 'month', interval_count: 1 },
+    metadata: { plan_id: String(plan.id) },
+  });
+  db.prepare(`
+    INSERT INTO stripe_prices (plan_id, billing_interval, currency, amount_sek, stripe_price_id, created_at, updated_at)
+    VALUES (?, 'month', 'SEK', ?, ?, ?, ?)
+  `).run(plan.id, amount, price.id, now(), now());
+  return price.id;
+}
+
+// Build/return a cached one-time Stripe coupon (duration: 'once' = applies to
+// the very first invoice only, perfect for first-month discounts). Coupons are
+// shared across customers; each subscription can redeem one at most once.
+async function ensureCoupon(kind, value) {
+  const cacheKey = `stripe_coupon_${kind}_${value}`;
+  const cached = getSetting(cacheKey, '');
+  if (cached) return cached;
+
+  const stripe = getStripe();
+  if (!stripe) {
+    const err = new Error('Live payment is not configured yet. Ask an administrator to add Stripe keys.');
+    err.code = 'PAYMENT_UNAVAILABLE';
+    err.status = 503;
+    throw err;
+  }
+
+  const n = Math.max(0, Number(value) || 0);
+  const params = { duration: 'once', metadata: { kind, value: String(n) } };
+  if (kind === 'fixed') {
+    params.amount_off = sekToMinor(n);
+    params.currency = 'sek';
+  } else {
+    params.percent_off = Math.min(100, n);
+  }
+  const coupon = await stripe.coupons.create(params);
+  upsertSetting(cacheKey, coupon.id);
+  return coupon.id;
+}
+
+function byStripeSubId(stripeSubscriptionId) {
+  return db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ? ORDER BY id DESC LIMIT 1').get(stripeSubscriptionId) || null;
+}
+
+function byProviderRef(ref) {
+  return db.prepare('SELECT * FROM payments WHERE provider_ref = ? ORDER BY id DESC LIMIT 1').get(ref) || null;
+}
+
+// Create (or refresh) the local subscriptions row that mirrors a Stripe
+// subscription. Closing any previously-active paid rows that this one replaces
+// keeps history while ensuring only one active plan per user.
+function upsertSubscriptionFromStripe({ userId, planId, stripeSubscriptionId, periodStart, periodEnd }) {
+  let row = byStripeSubId(stripeSubscriptionId);
+  if (!row) {
+    if (userId == null) userId = undefined;
+    const others = db.prepare(`
+      SELECT s.id FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+      WHERE s.user_id = ? AND s.status = 'active' AND p.is_free = 0 AND s.stripe_subscription_id != ?
+    `).all(userId || -1, stripeSubscriptionId || '');
+    for (const o of others) {
+      db.prepare(`UPDATE subscriptions SET status = 'replaced', updated_at = ? WHERE id = ?`).run(now(), o.id);
+    }
+    const subId = db.prepare(`
+      INSERT INTO subscriptions (user_id, plan_id, status, payment_method, payment_ref, stripe_subscription_id, billing_interval, current_period_start, current_period_end, created_at, updated_at)
+      VALUES (?, ?, 'active', 'stripe', ?, ?, 'month', ?, ?, ?, ?)
+    `).run(userId, planId, stripeSubscriptionId, stripeSubscriptionId, periodStart, periodEnd, now(), now()).lastInsertRowid;
+    row = db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(subId);
+  } else {
+    db.prepare(`
+      UPDATE subscriptions SET current_period_start = ?, current_period_end = ?, status = 'active', updated_at = ?
+      WHERE id = ?
+    `).run(periodStart, periodEnd, now(), row.id);
+  }
+  return row;
+}
+
+function grantPlanCreditsOnce(paymentRow) {
+  if (!paymentRow || paymentRow.renewal_granted) return;
+  const plan = db.prepare('SELECT * FROM plans WHERE id = ?').get(paymentRow.plan_id);
+  if (!plan || !(Number(plan.monthly_credits) > 0)) return;
+  grantCredits(paymentRow.user_id, plan.monthly_credits, 'plan_grant', { refType: 'subscription', refId: paymentRow.subscription_id || null });
+  db.prepare('UPDATE payments SET renewal_granted = 1 WHERE id = ?').run(paymentRow.id);
+}
+
+function rewardReferralOnce(paymentRow) {
+  if (!paymentRow || !paymentRow.referral_id || paymentRow.referral_rewarded) return;
+  rewardSubscriptionReferral(paymentRow.referral_id);
+  db.prepare('UPDATE payments SET referral_rewarded = 1 WHERE id = ?').run(paymentRow.id);
+}
+
+function periodFromStripeSub(sub, invoice = null) {
+  let periodStart = epochToIso(sub.current_period_start);
+  let periodEnd = epochToIso(sub.current_period_end);
+  if (invoice) {
+    const line = invoice.lines?.data?.[0];
+    if (line?.period?.end) {
+      periodStart = epochToIso(line.period.start);
+      periodEnd = epochToIso(line.period.end);
+    }
+  }
+  return { periodStart, periodEnd };
+}
+
+// Sync an active Stripe subscription into the local database (used by the
+// checkout redirect poll AND by webhooks). Never grants credits here - that is
+// the job of processPaidInvoice - but it does resolve the payment row created
+// when the checkout was started and records the real amount Stripe charged.
+export async function syncStripeSubscription({ stripeSubscriptionId, session = null }) {
+  const stripe = getStripe();
+  if (!stripe || !stripeSubscriptionId) return null;
+  let sub;
+  try {
+    sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+  } catch {
+    return byStripeSubId(stripeSubscriptionId) || null;
+  }
+
+  const planId = Number(sub.metadata?.plan_id || session?.metadata?.planId);
+  const userId = Number(sub.metadata?.user_id || session?.metadata?.userId);
+  const plan = planId ? db.prepare('SELECT * FROM plans WHERE id = ?').get(planId) : null;
+  const existing = byStripeSubId(stripeSubscriptionId);
+  const resolvedUserId = userId || existing?.user_id;
+  if (!plan || !resolvedUserId) return existing || null;
+
+  const { periodStart, periodEnd } = periodFromStripeSub(sub);
+  const row = upsertSubscriptionFromStripe({
+    userId: resolvedUserId,
+    planId: plan.id,
+    stripeSubscriptionId,
+    periodStart,
+    periodEnd,
+  });
+
+  if (session) {
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(Number(session.metadata?.paymentId));
+    if (payment && payment.status === 'pending') {
+      const amount = Math.round((Number(session.amount_total) || 0) / 100);
+      db.prepare(`
+        UPDATE payments SET status = 'paid', paid_at = ?, amount_sek = ?, original_amount_sek = ?,
+          method = 'stripe', subscription_id = ?, provider_ref = ?, provider_charge_ref = ?, checkout_session_id = ?, updated_at = ?
+        WHERE id = ?
+      `).run(now(), amount, amount, row.id, stripeSubscriptionId, session.payment_intent || null, session.id, now(), payment.id);
+      // First month: grant the plan credits right away so activation works even
+      // if the invoice.paid webhook is delayed or not yet configured. The same
+      // payment row is what the webhook would use, so this cannot double-grant.
+      const fresh = db.prepare('SELECT * FROM payments WHERE id = ?').get(payment.id);
+      if (!fresh.renewal_granted) {
+        grantPlanCreditsOnce(fresh);
+        rewardReferralOnce(fresh);
+      }
+    }
+  }
+  return row;
+}
+
+// Finalise a paid invoice: ensure the subscription row exists, create/link the
+// exact payments row for THIS invoice (one row per invoice = one credit grant),
+// and grant the monthly credits once. Fully idempotent across webhook retries
+// and racing with the checkout redirect poll.
+export async function processPaidInvoice(invoice) {
+  const stripeSubscriptionId = invoice.subscription;
+  if (!stripeSubscriptionId || typeof stripeSubscriptionId !== 'string') return null;
+
+  const stripe = getStripe();
+  let sub = null;
+  if (stripe) {
+    try { sub = await stripe.subscriptions.retrieve(stripeSubscriptionId); } catch { sub = null; }
+  }
+
+  let paymentId = null;
+  let planId = null;
+  let userId = null;
+  if (sub) {
+    paymentId = Number(sub.metadata?.paymentId);
+    planId = Number(sub.metadata?.plan_id);
+    userId = Number(sub.metadata?.user_id);
+  }
+  const existingSub = byStripeSubId(stripeSubscriptionId);
+  if (!planId && existingSub) planId = existingSub.plan_id;
+  if (!userId && existingSub) userId = existingSub.user_id;
+
+  const pending = paymentId ? db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId) : null;
+  if (!pending && !existingSub && (!planId || !userId)) return null;
+
+  const amount = Math.round((Number(invoice.amount_paid) || Number(invoice.amount_due) || 0) / 100);
+  const { periodStart, periodEnd } = sub
+    ? periodFromStripeSub(sub, invoice)
+    : { periodStart: epochToIso(invoice.created || sub?.current_period_start), periodEnd: epochToIso((invoice.created || 0) + 2592000) };
+
+  let row = pending && pending.subscription_id
+    ? db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(pending.subscription_id)
+    : null;
+  if (!row) {
+    row = upsertSubscriptionFromStripe({
+      userId: userId || existingSub?.user_id || pending?.user_id,
+      planId: planId || pending?.plan_id || existingSub?.plan_id,
+      stripeSubscriptionId,
+      periodStart,
+      periodEnd,
+    });
+  } else {
+    db.prepare(`
+      UPDATE subscriptions SET current_period_start = ?, current_period_end = ?, status = 'active', updated_at = ? WHERE id = ?
+    `).run(periodStart, periodEnd, now(), row.id);
+  }
+
+  const payment = (() => {
+    if (pending) {
+      if (pending.status !== 'paid') {
+        db.prepare(`
+          UPDATE payments SET status = 'paid', paid_at = ?, amount_sek = ?, original_amount_sek = ?,
+            method = 'stripe', subscription_id = ?, provider_ref = ?, provider_charge_ref = ?,
+            checkout_session_id = COALESCE(checkout_session_id, ?), updated_at = ?
+          WHERE id = ?
+        `).run(now(), amount, amount, row.id, invoice.id, invoice.payment_intent || null, pending.checkout_session_id, now(), pending.id);
+      } else {
+        db.prepare(`UPDATE payments SET provider_charge_ref = COALESCE(provider_charge_ref, ?), updated_at = ? WHERE id = ?`)
+          .run(invoice.payment_intent || null, now(), pending.id);
+      }
+      return db.prepare('SELECT * FROM payments WHERE id = ?').get(pending.id);
+    }
+    const chargeId = String(invoice.payment_intent || invoice.id || '');
+    const dup = byProviderRef(invoice.id);
+    if (dup) {
+      db.prepare('UPDATE payments SET provider_charge_ref = COALESCE(provider_charge_ref, ?) WHERE id = ?')
+        .run(invoice.payment_intent || null, dup.id);
+      return dup;
+    }
+    const inserted = db.prepare(`
+      INSERT INTO payments (user_id, plan_id, subscription_id, amount_sek, currency, method, status, provider_ref, provider_charge_ref, created_at, paid_at)
+      VALUES (?, ?, ?, ?, 'SEK', 'stripe', 'paid', ?, ?, ?, ?)
+    `).run(row.user_id, row.plan_id, row.id, amount, invoice.id, invoice.payment_intent || chargeId, now(), now());
+    return db.prepare('SELECT * FROM payments WHERE id = ?').get(inserted.lastInsertRowid);
+  })();
+
+  if (payment.renewal_granted) return payment;
+  grantPlanCreditsOnce(payment);
+  rewardReferralOnce(payment);
+  return payment;
+}
+
+export function cancelScheduledSubscription(row) {
+  return db.prepare('UPDATE subscriptions SET cancelled_at = ?, updated_at = ? WHERE id = ?').run(now(), now(), row.id);
+}
+
+// Cancel a recurring Stripe subscription immediately (used when switching to a
+// different plan). Stripe prorates the unused time to the customer balance,
+// which is then applied to the first invoice of the new subscription.
+export async function cancelStripeSubscriptionNow(stripeSubscriptionId) {
+  const stripe = getStripe();
+  if (!stripe || !stripeSubscriptionId) return null;
+  let sub = null;
+  try { sub = await stripe.subscriptions.retrieve(stripeSubscriptionId); } catch { return null; }
+  if (sub.status === 'canceled' || sub.status === 'unpaid') return sub;
+  return stripe.subscriptions.cancel(stripeSubscriptionId);
+}
+
+export async function reactivateStripeSubscription(stripeSubscriptionId) {
+  const stripe = getStripe();
+  if (!stripe || !stripeSubscriptionId) return null;
+  const sub = await stripe.subscriptions.update(stripeSubscriptionId, { cancel_at_period_end: false });
+  return sub;
+}
+
+export function markSubscriptionDeleted(stripeSubscriptionId) {
+  const row = byStripeSubId(stripeSubscriptionId);
+  if (!row) return null;
+  if (row.status !== 'active') return row;
+  db.prepare(`UPDATE subscriptions SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?`)
+    .run(now(), now(), row.id);
+  ensureFreePlan(row.user_id);
+  return db.prepare('SELECT * FROM subscriptions WHERE id = ?').get(row.id);
+}
+
+// ---------------------------------------------------------------------------
+// Checkout
+// ---------------------------------------------------------------------------
+
+export async function createCheckout({ user, plan, method, offer, origin, referral = null }) {
+  const priced = applyOffer(plan, offer);
+  let firstAmount = priced.amount;
+  let referralPercent = 0;
+  if (referral && referral.percent > 0) {
+    referralPercent = referral.percent;
+    firstAmount = Math.round(firstAmount * (100 - referral.percent) / 100);
+  }
+
+  const useTrial = firstAmount <= 0; // 100% first-month discount => 30d free trial
+  const couponDescs = [];
+  if (!useTrial) {
+    if (offer && firstAmount < priced.original) {
+      if (offer.discount_type === 'fixed') {
+        if (Number(offer.discount_value) < priced.original) couponDescs.push({ kind: 'fixed', value: offer.discount_value });
+      } else if (Number(offer.discount_value) < 100) {
+        couponDescs.push({ kind: 'percent', value: offer.discount_value });
+      }
+    }
+    if (referralPercent > 0 && referralPercent < 100) {
+      couponDescs.push({ kind: 'referral', value: referralPercent });
+    }
+  }
+  const couponKeys = new Set();
+  const coupons = [];
+  for (const d of couponDescs) {
+    const dup = [...couponKeys];
+    if (dup.some((k) => k.kind === d.kind && String(k.value) === String(d.value))) continue;
+    couponKeys.add({ kind: d.kind, value: d.value });
+    const kind = d.kind === 'referral' ? 'percent' : d.kind;
+    coupons.push(await ensureCoupon(kind, d.value));
+  }
+
+  const pay = db.prepare(`
+    INSERT INTO payments (user_id, plan_id, amount_sek, original_amount_sek, currency, method, status, offer_id, referral_id, referral_discount, created_at)
+    VALUES (?, ?, ?, ?, 'SEK', ?, 'pending', ?, ?, ?, ?)
+  `).run(user.id, plan.id, firstAmount, priced.original, method, offer?.id || null, referral?.referralId || null, referralPercent, now());
+  const paymentId = Number(pay.lastInsertRowid);
+
+  const stripe = getStripe();
+  if (!stripe && demoPaymentsEnabled()) {
+    // Explicit PAYMENT_DEMO=1 demo gateway: simulate one successful payment so
+    // plan upgrades and credit grants can be tested without Stripe keys. Every
+    // payment is honestly stamped with a demo_* provider reference.
+    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`).run(`demo_${paymentId}`, paymentId);
+    const row = upsertSubscriptionFromStripe({
+      userId: user.id,
+      planId: plan.id,
+      stripeSubscriptionId: `demo_${paymentId}`,
+      periodStart: now(),
+      periodEnd: new Date(Date.now() + 30 * 86400000).toISOString(),
+    });
+    db.prepare(`UPDATE payments SET status = 'paid', paid_at = ?, subscription_id = ? WHERE id = ?`)
+      .run(now(), row.id, paymentId);
+    grantPlanCreditsOnce(db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId));
+    return {
+      mode: 'activated',
+      paymentId,
+      subscription: getActivePlan(user.id),
+      wallet: getWallet(user.id),
+      demo: true,
+    };
+  }
+
+  if (!stripe) {
+    db.prepare(`UPDATE payments SET status = 'requires_gateway', error = ? WHERE id = ?`)
+      .run('Stripe keys are not configured. Set STRIPE_SECRET_KEY in the backend environment.', paymentId);
+    const err = new Error('Live payment is not configured yet. Ask an administrator to add Stripe keys.');
+    err.code = 'PAYMENT_UNAVAILABLE';
+    err.status = 503;
+    throw err;
+  }
+
+  const priceId = await ensureRecurringPrice(plan);
+  const successUrl = `${origin}/pricing?checkout=success&payment=${paymentId}`;
+  const cancelUrl = `${origin}/pricing?checkout=cancel&payment=${paymentId}`;
+
+  const sessionParams = {
+    mode: 'subscription',
+    customer_email: user.email,
+    client_reference_id: String(paymentId),
+    payment_method_types: paymentMethodTypes(method),
+    line_items: [{ price: priceId, quantity: 1 }],
+    subscription_data: {
+      metadata: {
+        paymentId: String(paymentId),
+        userId: String(user.id),
+        planId: String(plan.id),
+        method,
+      },
+    },
+    metadata: {
+      paymentId: String(paymentId),
+      userId: String(user.id),
+      planId: String(plan.id),
+      method,
+    },
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    locale: 'auto',
+  };
+  if (useTrial) {
+    sessionParams.subscription_data.trial_period_days = 30;
+  } else if (coupons.length) {
+    sessionParams.discounts = coupons.map((c) => ({ coupon: c }));
+  }
+
+  const session = await stripe.checkout.sessions.create(sessionParams);
+
+  db.prepare(`UPDATE payments SET checkout_session_id = ?, provider_ref = ? WHERE id = ?`)
+    .run(session.id, session.id, paymentId);
+
+  return { mode: 'checkout', url: session.url, paymentId, sessionId: session.id };
+}
+
+// Legacy one-time activation used by old payments / free flows.
 export function activatePaidPlan(userId, plan, method, paymentId) {
   const current = getActivePlan(userId);
   if (current) {
@@ -175,96 +622,6 @@ export function fulfillPayment(paymentId) {
   return db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
 }
 
-export async function createCheckout({ user, plan, method, offer, origin, referral = null }) {
-  const priced = applyOffer(plan, offer);
-  let referralDiscount = 0;
-  if (referral && referral.percent > 0) {
-    referralDiscount = referral.percent;
-    priced.amount = Math.round(priced.amount * (100 - referral.percent) / 100);
-  }
-  const attachReferral = referral && priced.amount > 0 ? referral.referralId : null;
-  const pay = db.prepare(`
-    INSERT INTO payments (user_id, plan_id, amount_sek, original_amount_sek, currency, method, status, offer_id, referral_id, referral_discount, created_at)
-    VALUES (?, ?, ?, ?, 'SEK', ?, 'pending', ?, ?, ?, ?)
-  `).run(user.id, plan.id, priced.amount, priced.original, method, offer?.id || null, attachReferral, attachReferral ? referralDiscount : 0, now());
-  const paymentId = pay.lastInsertRowid;
-
-  if (priced.amount === 0) {
-    // Free offer: stamp the provider ref first, then fulfil - fulfil() marks it
-    // paid AND activates the plan + grants credits (order matters).
-    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`)
-      .run(`free_offer_${paymentId}`, paymentId);
-    fulfillPayment(paymentId);
-    return {
-      mode: 'activated',
-      paymentId,
-      subscription: getActivePlan(user.id),
-      wallet: getWallet(user.id),
-    };
-  }
-
-  const stripe = getStripe();
-  if (!stripe && demoPaymentsEnabled()) {
-    // Explicit PAYMENT_DEMO=1 demo gateway: simulate a successful payment so
-    // plan upgrades and credit grants can be tested without Stripe keys. Every
-    // payment is honestly stamped with a demo_* provider reference.
-    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`)
-      .run(`demo_${paymentId}`, paymentId);
-    fulfillPayment(paymentId);
-    return {
-      mode: 'activated',
-      paymentId,
-      subscription: getActivePlan(user.id),
-      wallet: getWallet(user.id),
-      demo: true,
-    };
-  }
-
-  if (!stripe) {
-    db.prepare(`UPDATE payments SET status = 'requires_gateway', error = ? WHERE id = ?`)
-      .run('Stripe keys are not configured. Set STRIPE_SECRET_KEY in the backend environment.', paymentId);
-    const err = new Error('Live payment is not configured yet. Ask an administrator to add Stripe keys.');
-    err.code = 'PAYMENT_UNAVAILABLE';
-    err.status = 503;
-    throw err;
-  }
-
-  const successUrl = `${origin}/pricing?checkout=success&payment=${paymentId}`;
-  const cancelUrl = `${origin}/pricing?checkout=cancel&payment=${paymentId}`;
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    currency: 'sek',
-    customer_email: user.email,
-    client_reference_id: String(paymentId),
-    payment_method_types: paymentMethodTypes(method),
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: 'sek',
-        unit_amount: priced.amount * 100,
-        product_data: {
-          name: `${plan.name} plan`,
-          description: plan.tagline || `${plan.monthly_credits} AI credits / month`,
-        },
-      },
-    }],
-    metadata: {
-      paymentId: String(paymentId),
-      userId: String(user.id),
-      planId: String(plan.id),
-      method,
-    },
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    locale: 'auto',
-  });
-
-  db.prepare(`UPDATE payments SET checkout_session_id = ?, provider_ref = ? WHERE id = ?`)
-    .run(session.id, session.id, paymentId);
-
-  return { mode: 'checkout', url: session.url, paymentId, sessionId: session.id };
-}
-
 export async function refundStripePayment(payment, amountSek, reason) {
   const stripe = getStripe();
   if (!stripe) {
@@ -273,18 +630,12 @@ export async function refundStripePayment(payment, amountSek, reason) {
     err.status = 503;
     throw err;
   }
-  let chargeId = null;
-  let pi = null;
-  if (payment.checkout_session_id) {
+  let pi = payment.provider_charge_ref || null;
+  if (!pi && payment.checkout_session_id) {
     const session = await stripe.checkout.sessions.retrieve(payment.checkout_session_id);
     pi = session.payment_intent;
   }
   if (!pi && payment.provider_ref && String(payment.provider_ref).startsWith('pi_')) pi = payment.provider_ref;
-  if (!pi && payment.checkout_session_id) {
-    const session = await stripe.checkout.sessions.retrieve(payment.checkout_session_id, { expand: ['payment_intent'] });
-    pi = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-    chargeId = session.payment_intent?.latest_charge || null;
-  }
   if (!pi) {
     const err = new Error('No Stripe payment intent found for this charge.');
     err.code = 'REFUND_UNAVAILABLE';
@@ -300,35 +651,78 @@ export async function refundStripePayment(payment, amountSek, reason) {
   return refund;
 }
 
+// ---------------------------------------------------------------------------
+// Stripe webhook
+// ---------------------------------------------------------------------------
+
 export async function handleStripeEvent(event) {
   const type = event.type;
+  const object = event.data.object;
+
   if (type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const paymentId = Number(session.metadata?.paymentId || session.client_reference_id);
+    if (object.mode === 'subscription' && object.subscription) {
+      await syncStripeSubscription({ stripeSubscriptionId: object.subscription, session: object });
+      return;
+    }
+    // Legacy one-time checkouts.
+    const paymentId = Number(object.metadata?.paymentId || object.client_reference_id);
     if (!paymentId) return;
     const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
     if (!payment || payment.status === 'paid') return;
-    if (session.payment_status !== 'paid' && session.status !== 'complete') return;
+    if (object.payment_status !== 'paid' && object.status !== 'complete') return;
     db.prepare('UPDATE payments SET provider_ref = ? WHERE id = ?')
-      .run(session.payment_intent || session.id, paymentId);
+      .run(object.payment_intent || object.id, paymentId);
     fulfillPayment(paymentId);
     return;
   }
+
   if (type === 'checkout.session.expired' || type === 'checkout.session.async_payment_failed') {
-    const session = event.data.object;
-    const paymentId = Number(session.metadata?.paymentId || session.client_reference_id);
+    const paymentId = Number(object.metadata?.paymentId || object.client_reference_id);
     if (!paymentId) return;
     db.prepare(`UPDATE payments SET status = 'failed', error = ? WHERE id = ? AND status = 'pending'`)
       .run(type, paymentId);
     return;
   }
+
+  if (type === 'invoice.paid') {
+    await processPaidInvoice(object);
+    return;
+  }
+
+  if (type === 'invoice.payment_failed') {
+    const subId = object.subscription;
+    const row = byStripeSubId(subId);
+    if (row) db.prepare(`UPDATE subscriptions SET updated_at = ? WHERE id = ?`).run(now(), row.id);
+    return;
+  }
+
+  if (type === 'customer.subscription.deleted') {
+    markSubscriptionDeleted(object.id);
+    return;
+  }
+
+  if (type === 'customer.subscription.updated') {
+    if (object.status === 'canceled') {
+      markSubscriptionDeleted(object.id);
+    } else if (object.id) {
+      const row = byStripeSubId(object.id);
+      if (row) {
+        const { periodStart, periodEnd } = periodFromStripeSub(object);
+        db.prepare(`UPDATE subscriptions SET current_period_start = ?, current_period_end = ?, updated_at = ? WHERE id = ?`)
+          .run(periodStart, periodEnd, now(), row.id);
+      }
+    }
+    return;
+  }
+
   if (type === 'charge.refunded') {
-    const charge = event.data.object;
+    const charge = object;
     const pi = charge.payment_intent;
     if (!pi) return;
-    const payment = db.prepare('SELECT * FROM payments WHERE provider_ref = ? OR checkout_session_id = ?').get(pi, pi);
+    const payment = db.prepare('SELECT * FROM payments WHERE provider_charge_ref = ? OR provider_ref = ? OR checkout_session_id = ?').get(pi, pi, pi);
     if (!payment) return;
     db.prepare(`UPDATE payments SET status = 'refunded' WHERE id = ? AND status = 'paid'`).run(payment.id);
+    return;
   }
 }
 

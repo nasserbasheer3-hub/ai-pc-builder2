@@ -781,6 +781,36 @@ export function migrate() {
     const payCols2 = db.prepare('PRAGMA table_info(payments)').all().map((c) => c.name);
     if (!payCols2.includes('referral_id')) db.exec('ALTER TABLE payments ADD COLUMN referral_id INTEGER');
     if (!payCols2.includes('referral_discount')) db.exec('ALTER TABLE payments ADD COLUMN referral_discount INTEGER NOT NULL DEFAULT 0');
+
+    // --- Recurring subscription support (Stripe Subscriptions) --------------
+    const subCols = db.prepare('PRAGMA table_info(subscriptions)').all().map((c) => c.name);
+    if (!subCols.includes('stripe_subscription_id')) {
+      db.exec('ALTER TABLE subscriptions ADD COLUMN stripe_subscription_id TEXT');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_subs_stripe ON subscriptions(stripe_subscription_id)');
+    }
+    if (!subCols.includes('billing_interval')) {
+      db.exec("ALTER TABLE subscriptions ADD COLUMN billing_interval TEXT NOT NULL DEFAULT 'month'");
+    }
+    const payCols3 = db.prepare('PRAGMA table_info(payments)').all().map((c) => c.name);
+    if (!payCols3.includes('provider_charge_ref')) db.exec('ALTER TABLE payments ADD COLUMN provider_charge_ref TEXT');
+    if (!payCols3.includes('renewal_granted')) db.exec('ALTER TABLE payments ADD COLUMN renewal_granted INTEGER NOT NULL DEFAULT 0');
+    if (!payCols3.includes('referral_rewarded')) db.exec('ALTER TABLE payments ADD COLUMN referral_rewarded INTEGER NOT NULL DEFAULT 0');
+
+    // Cache of Stripe recurring Prices we have created per plan/amount so a
+    // plan is only ever mirrored into Stripe once per price point.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS stripe_prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id INTEGER NOT NULL REFERENCES plans(id),
+        billing_interval TEXT NOT NULL DEFAULT 'month',
+        currency TEXT NOT NULL DEFAULT 'SEK',
+        amount_sek INTEGER NOT NULL,
+        stripe_price_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(plan_id, billing_interval, currency, amount_sek)
+      );
+    `);
   })();
 }
 
