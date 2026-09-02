@@ -1,0 +1,17 @@
+{
+  "name": "gaming-performance-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Premium Gaming Performance Dashboard - Track, Analyze, Improve, Optimize",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "seed": "npm --prefix backend run seed",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "node scripts/dev.js",
+    "start": "node scripts/dev.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
