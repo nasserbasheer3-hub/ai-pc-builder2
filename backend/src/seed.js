@@ -384,6 +384,12 @@ export function seedIfEmpty({ demo = false, admin = false } = {}) {
   seed({ demo, admin });
 }
 
+// Create the admin account on boot when the operator explicitly provided an
+// ADMIN_PASSWORD. Never auto-creates a default-password admin in production.
+export function ensureAdmin() {
+  seedAdmin();
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   seed();
 }
