@@ -48,11 +48,6 @@ export default function Login() {
         <Link to="/forgot-password">{t('auth.forgotPassword')}</Link>
         <Link to="/signup">{t('auth.createAccount')}</Link>
       </div>
-      <div className="card pad-sm" style={{ marginTop: 22, background: 'rgba(34,211,238,0.06)', borderColor: 'rgba(34,211,238,0.25)' }}>
-        <p style={{ fontSize: '0.84rem', color: 'var(--text-dim)' }}>
-          <b style={{ color: 'var(--text)' }}>{t('auth.demoAccount')}</b> player@demo.local · Demo12345!
-        </p>
-      </div>
       <div className="pill-row" style={{ marginTop: 18, justifyContent: 'center' }}>
         <LanguageSwitcher />
       </div>
