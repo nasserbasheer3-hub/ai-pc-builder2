@@ -1,18 +1,26 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 
 dotenv.config({ path: path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.env') });
 dotenv.config(); // also load from cwd
 
 const root = process.cwd();
 
+const isProduction = process.env.NODE_ENV === 'production';
+// In production, never fall back to the well-known dev secrets that ship in this
+// public repository (they would let anyone forge user/admin JWTs). Generate an
+// ephemeral random secret per boot instead; sessions are simply reset on each
+// restart until the operator sets JWT_SECRET / JWT_ADMIN_SECRET.
+const ephemeral = () => crypto.randomBytes(32).toString('hex');
+
 export const config = {
   port: Number(process.env.PORT || 3001),
   nodeEnv: process.env.NODE_ENV || 'development',
   appUrl: process.env.APP_URL || 'http://localhost:5173',
-  jwtSecret: process.env.JWT_SECRET || 'dev-insecure-jwt-secret-change-me',
-  jwtAdminSecret: process.env.JWT_ADMIN_SECRET || 'dev-insecure-admin-jwt-secret-change-me',
+  jwtSecret: process.env.JWT_SECRET || (isProduction ? ephemeral() : 'dev-insecure-jwt-secret-change-me'),
+  jwtAdminSecret: process.env.JWT_ADMIN_SECRET || (isProduction ? ephemeral() : 'dev-insecure-admin-jwt-secret-change-me'),
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((s) => s.trim()),
   dbPath: process.env.DATABASE_PATH
     ? path.resolve(root, process.env.DATABASE_PATH)

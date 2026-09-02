@@ -10,6 +10,8 @@ import { config } from './config.js';
 import { db, migrate } from './db.js';
 import { fail } from './utils/helpers.js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profile.js';
 import gamesRoutes from './routes/games.js';
@@ -63,11 +65,11 @@ console.log(`[setup] demo pay: ${demoPaymentsEnabled() ? 'ENABLED (PAYMENT_DEMO=
 console.log(`[setup] ai:       ${config.ai.apiKey ? `configured (${config.ai.model})` : 'NOT configured - AI chat/coach disabled until USER_LLM_API_KEY is set'}`);
 console.log(`[setup] mail:     ${config.email.smtpHost ? 'configured' : 'NOT configured (SMTP_HOST/USER/PASS) - email links are not delivered'}`);
 console.log(`[setup] admin:    ${process.env.ADMIN_PASSWORD ? `will be ensured: ${config.admin.email}` : (adminSetupToken ? 'no account yet - one-time setup token printed above (open /admin/setup)' : 'configured')}`);
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-insecure-jwt-secret-change-me') {
-  console.warn('[setup] WARNING: JWT_SECRET is the public default - user sessions can be forged. Set a random JWT_SECRET env var.');
+if (isProduction && !process.env.JWT_SECRET) {
+  console.warn('[setup] WARNING: production is running with an ephemeral random JWT_SECRET (sessions reset on every restart). Set JWT_SECRET for stable sessions.');
 }
-if (!process.env.JWT_ADMIN_SECRET || process.env.JWT_ADMIN_SECRET === 'dev-insecure-admin-jwt-secret-change-me') {
-  console.warn('[setup] WARNING: JWT_ADMIN_SECRET is the public default - admin sessions can be forged. Set a random JWT_ADMIN_SECRET env var.');
+if (isProduction && !process.env.JWT_ADMIN_SECRET) {
+  console.warn('[setup] WARNING: production is running with an ephemeral random JWT_ADMIN_SECRET (admin sessions reset on every restart). Set JWT_ADMIN_SECRET for stable sessions.');
 }
 
 const app = express();
