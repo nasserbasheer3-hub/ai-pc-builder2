@@ -104,6 +104,25 @@ app.use('/api/public', publicRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/community', communityRoutes);
 
+// Single-origin production: serve the built frontend (frontend/dist) so the
+// SPA and the API live on one URL (no CORS/proxy needed). API 404s below
+// remain untouched; only non-/api GETs fall back to the SPA entry point.
+const FRONTEND_DIST = path.resolve(__dirname, '..', '..', 'frontend', 'dist');
+if (fs.existsSync(path.join(FRONTEND_DIST, 'index.html'))) {
+  app.use(express.static(FRONTEND_DIST, {
+    maxAge: '7d',
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  }));
+  app.get(/^\/(?!api(?:\/|$)|uploads(?:\/|$)).*/, (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+  });
+  console.log(`[static] serving frontend from ${FRONTEND_DIST}`);
+} else {
+  console.log(`[static] ${FRONTEND_DIST} not found - API-only mode`);
+}
+
 app.use((req, res) => fail(res, 404, 'NOT_FOUND', 'Endpoint not found.'));
 
 // eslint-disable-next-line no-unused-vars
