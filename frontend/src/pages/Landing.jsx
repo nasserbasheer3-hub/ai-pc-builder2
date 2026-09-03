@@ -123,11 +123,16 @@ export default function Landing() {
             <Link to="/dashboard" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'open_dashboard' })}>{t('landing.openDashboard')}</Link>
           ) : (
             <>
-              <Link to="/signup" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'signup_hero' })}>{t('landing.createFreeAccount')}</Link>
-              <Link to="/login" className="btn btn-ghost btn-lg" onClick={() => track('cta_click', { action: 'login_hero' })}>{t('landing.signIn')}</Link>
+              <Link to="/try" className="btn btn-primary btn-lg" onClick={() => track('cta_click', { action: 'try_hero' })}>{t('landing.tryCta')}</Link>
+              <Link to="/signup" className="btn btn-ghost btn-lg" onClick={() => track('cta_click', { action: 'signup_hero' })}>{t('landing.createFreeAccount')}</Link>
             </>
           )}
         </div>
+        {!user && (
+          <div style={{ marginTop: 12, fontSize: '0.85rem' }}>
+            <Link to="/login" style={{ color: 'var(--text-dim)', textDecoration: 'none' }} onClick={() => track('cta_click', { action: 'login_hero' })}>{t('landing.loginHint')}</Link>
+          </div>
+        )}
         <div className="pill-row" style={{ marginTop: 18 }}>
           <LanguageSwitcher />
         </div>

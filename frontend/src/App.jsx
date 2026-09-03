@@ -33,6 +33,7 @@ const PcPsu = lazy(() => import('./pages/PcPsu.jsx'));
 const PcGameCheck = lazy(() => import('./pages/PcGameCheck.jsx'));
 const PcMy = lazy(() => import('./pages/PcMy.jsx'));
 const SharedBuild = lazy(() => import('./pages/SharedBuild.jsx'));
+const TryBuilder = lazy(() => import('./pages/TryBuilder.jsx'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile.jsx'));
 const PcUpgrade = lazy(() => import('./pages/PcUpgrade.jsx'));
 const PcTroubleshooter = lazy(() => import('./pages/PcTroubleshooter.jsx'));
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/pc/compare" element={<Compare />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/try" element={<TryBuilder />} />
           <Route path="/pc/shared/:slug" element={<SharedBuild />} />
           <Route path="/u/:slug" element={<PublicProfile />} />
         </Route>

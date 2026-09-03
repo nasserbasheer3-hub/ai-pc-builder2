@@ -7,8 +7,48 @@ import { aiEnabled } from '../utils/ai.js';
 import { sendMail } from '../utils/mailer.js';
 import { config } from '../config.js';
 import { partsDetail, totalPrice, resolvePart } from '../services/pcParts.js';
+import { buildPc } from '../engines/builder.js';
 
 const router = Router();
+
+// Per-IP limiter for the anonymous builder trial (anti-abuse + cost guard).
+const trialLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, code: 'RATE_LIMITED', message: 'Too many trial builds. Create a free account to keep building.' },
+});
+
+// POST /api/public/build — instant anonymous trial build (no account, no save).
+router.post('/build', trialLimiter, (req, res) => {
+  const budget = Number(req.body?.budget);
+  const currency = String(req.body?.currency || 'USD').toUpperCase();
+  const supported = ['USD', 'EUR', 'GBP'];
+  if (!Number.isFinite(budget) || budget < 300 || budget > 100000) {
+    return fail(res, 422, 'VALIDATION', 'Budget must be between 300 and 100000.');
+  }
+  if (!supported.includes(currency)) return fail(res, 422, 'VALIDATION', 'Currency must be USD, EUR or GBP.');
+  const games = Array.isArray(req.body?.games)
+    ? req.body.games.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 12)
+    : [];
+  try {
+    const result = buildPc({
+      budget, currency, games,
+      resolution: req.body?.resolution || '1080p',
+      targetFps: Number(req.body?.targetFps) || 60,
+      cpuPreference: req.body?.cpuPreference || 'any',
+      gpuPreference: req.body?.gpuPreference || 'any',
+      ramGb: Number(req.body?.ramGb) || 32,
+      purpose: req.body?.purpose || 'gaming',
+    });
+    if (result.status !== 'ready') return ok(res, result);
+    // Trial results are computed on the fly and never persisted.
+    return ok(res, { ...result, trial: true, note: 'Trial result - create a free account to save, compare and share your build.' });
+  } catch (e) {
+    return fail(res, 400, 'BUILD_FAILED', e.message || 'Could not build a configuration.');
+  }
+});
 
 // Tight per-IP limiter for the public contact form (anti-spam).
 const contactLimiter = rateLimit({

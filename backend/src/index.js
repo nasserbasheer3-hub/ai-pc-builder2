@@ -33,7 +33,7 @@ import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
-import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog } from './seed.js';
+import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog, suspendLegacyDemoAccounts } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
 import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled } from './services/payments.js';
 
@@ -45,6 +45,7 @@ try {
   const seededFromEmpty = seedIfEmpty({ demo: false, admin: false });
   // Existing database: additively import any newly added built-in catalog items.
   if (!seededFromEmpty) syncCatalog();
+  suspendLegacyDemoAccounts();
   if (process.env.ADMIN_PASSWORD) ensureAdmin();
 } catch (e) {
   console.error('[seed] auto-seed failed:', e.message);

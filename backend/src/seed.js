@@ -682,6 +682,17 @@ export function adminSetupTokenInfo() {
   return { active: !!(exp && Date.now() < Number(exp)) };
 }
 
+// Security: any accounts created from the old demo seeder stay locked out so a
+// publicly-known shared password can never be used against the live platform.
+export function suspendLegacyDemoAccounts() {
+  const r = db.prepare(`
+    UPDATE users SET status = 'suspended', updated_at = datetime('now')
+    WHERE status = 'active' AND email LIKE '%@demo.local'
+  `).run();
+  if (r.changes) console.log(`[seed] suspended ${r.changes} legacy demo account(s)`);
+  return r.changes;
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   seed();
 }
