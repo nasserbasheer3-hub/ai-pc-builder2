@@ -570,7 +570,7 @@ function migrateBrandName() {
   };
   let changed = 0;
   try {
-    changed += q('articles', ['title', 'excerpt', 'content', 'author_name']);
+    changed += q('articles', ['title', 'excerpt', 'content', 'author_name', 'tags']);
     changed += q('admin_settings', ['value']);
     changed += q('plans', ['name', 'tagline', 'features_json']);
   } catch (e) {
