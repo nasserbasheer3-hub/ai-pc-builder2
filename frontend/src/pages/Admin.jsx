@@ -72,7 +72,7 @@ export default function Admin() {
           <button key={key} className={`chip ${tab === key ? 'chip-on' : ''}`} onClick={() => setTab(key)}>{TAB_ICONS[key]} {t(label)}</button>
         ))}
       </div>
-      {tab === 'overview' && <Overview />}
+      {tab === 'overview' && <Overview onEmailChanged={(em) => setMe((p) => (p ? { ...p, email: em } : p))} currentEmail={me?.email} />}
       {tab === 'users' && <Users />}
       {tab === 'games' && <Games />}
       {tab === 'hardware' && <Hardware />}
@@ -89,7 +89,7 @@ export default function Admin() {
   );
 }
 
-function Overview() {
+function Overview({ onEmailChanged, currentEmail }) {
   const toast = useToast();
   const { t } = useI18n();
   const [data, setData] = useState(null);
@@ -97,6 +97,9 @@ function Overview() {
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [saving, setSaving] = useState(false);
+  const [em, setEm] = useState('');
+  const [emPw, setEmPw] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
   useEffect(() => { adminRequest('GET', '/analytics').then(setData).catch((e) => toast.err(e.message)); }, []);
   if (!data) return <LoadingBlock text={t('common.loading')} />;
 
@@ -110,6 +113,17 @@ function Overview() {
       setCur(''); setPw1(''); setPw2('');
     } catch (e) { toast.err(e.message); }
     finally { setSaving(false); }
+  };
+
+  const changeEmail = async () => {
+    setEmailSaving(true);
+    try {
+      const r = await adminRequest('POST', '/change-email', { email: em.trim(), currentPassword: emPw });
+      toast.ok(t('admin.emailUpdated'));
+      setEm(''); setEmPw('');
+      if (onEmailChanged) onEmailChanged(r.email);
+    } catch (e) { toast.err(e.message); }
+    finally { setEmailSaving(false); }
   };
 
   return (
@@ -158,6 +172,20 @@ function Overview() {
         </div>
         <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={saving || !cur || !pw1} onClick={changePassword}>
           {saving ? '…' : t('admin.updatePassword')}
+        </button>
+      </Card>
+
+      <Card style={{ marginTop: 18 }}>
+        <CardHead title={<>📧 {t('admin.accountEmail')}</>} />
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', margin: '0 0 12px' }}>
+          {t('admin.changeEmailNote')}
+        </p>
+        <div className="grid cols-2" style={{ gap: 10 }}>
+          <div className="field"><label>{t('admin.newEmail')}</label><input className="input" type="email" value={em} onChange={(e) => setEm(e.target.value)} autoComplete="email" placeholder={currentEmail} /></div>
+          <div className="field"><label>{t('admin.currentPassword')}</label><input className="input" type="password" value={emPw} onChange={(e) => setEmPw(e.target.value)} autoComplete="current-password" /></div>
+        </div>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={emailSaving || !em.trim() || !emPw} onClick={changeEmail}>
+          {emailSaving ? '…' : t('admin.updateEmail')}
         </button>
       </Card>
     </>

@@ -131,8 +131,7 @@ app.get('/api/setup/status', (req, res) => {
       aiEnabled: Boolean(config.ai.apiKey),
       aiModel: config.ai.apiKey ? config.ai.model : '',
       mailConfigured: Boolean(config.email.smtpHost),
-      adminConfigured: Boolean(process.env.ADMIN_PASSWORD),
-      adminEmail: process.env.ADMIN_PASSWORD ? config.admin.email : '',
+      adminConfigured: db.prepare('SELECT COUNT(*) c FROM admin_users').get().c > 0,
     },
   });
 });

@@ -166,6 +166,23 @@ router.post('/change-password',
     ok(res, { updated: true });
   });
 
+// POST /api/admin/change-email  (self-service; current password required)
+router.post('/change-email',
+  body('email').isEmail().withMessage('Valid email required.').normalizeEmail(),
+  body('currentPassword').notEmpty().withMessage('Current password required.'),
+  validate, (req, res) => {
+    const admin = db.prepare('SELECT * FROM admin_users WHERE id=?').get(req.admin.id);
+    if (!admin || !bcrypt.compareSync(String(req.body.currentPassword), admin.password_hash)) {
+      return fail(res, 401, 'INVALID_CREDENTIALS', 'Current password is incorrect.');
+    }
+    const em = String(req.body.email).toLowerCase();
+    const dup = db.prepare('SELECT id FROM admin_users WHERE email=? AND id<>?').get(em, admin.id);
+    if (dup) return fail(res, 409, 'EMAIL_TAKEN', 'Another admin already uses this email.');
+    db.prepare('UPDATE admin_users SET email=?, updated_at=? WHERE id=?').run(em, now(), admin.id);
+    audit(req.admin, 'admin_email_change', null, null, { from: admin.email, to: em });
+    ok(res, { email: em });
+  });
+
 // GET /api/admin/me
 router.get('/me', (req, res) => {
   ok(res, { admin: { id: req.admin.id, email: req.admin.email, role: req.admin.role } });
