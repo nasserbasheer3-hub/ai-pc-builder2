@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n, LanguageSwitcher } from '../i18n/index.jsx';
 import { api } from '../api/client';
@@ -85,7 +85,9 @@ export function Sidebar({ open, onClose }) {
   return (
     <aside className="sidebar" style={open ? { display: 'flex' } : undefined}>
       <div className="brand">
-        <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" />
+        <Link to="/" aria-label={t('nav.home')} style={{ display: 'inline-flex', textDecoration: 'none' }}>
+          <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" />
+        </Link>
       </div>
       {NAV.map((n, i) => n.group
         ? <div key={i} className="nav-group">{t(n.group)}</div>

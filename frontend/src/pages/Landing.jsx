@@ -111,7 +111,9 @@ export default function Landing() {
     <div className="page" style={{ maxWidth: 1100, margin: '0 auto', padding: '0 22px' }}>
       <div className="bg-fx" /><div className="bg-grid" />
       <div className="hero">
-        <img src="/logo/logo-full.webp" alt="ApexCore" style={{ display: 'block', margin: '0 auto 12px', width: 'min(520px, 92vw)' }} />
+        <Link to="/" aria-label="ApexCore home" style={{ display: 'block', textDecoration: 'none' }}>
+          <img src="/logo/logo-full.webp" alt="ApexCore" style={{ display: 'block', margin: '0 auto 12px', width: 'min(520px, 92vw)' }} />
+        </Link>
         <div className="kicker">{t('landing.kicker')}</div>
         <h1>
           {t('landing.h1a')}<br />

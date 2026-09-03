@@ -65,7 +65,15 @@ export default function ArticlePage() {
   return (
     <div className="page" style={{ maxWidth: 820, margin: '0 auto', padding: '0 22px' }}>
       <div className="bg-fx" /><div className="bg-grid" />
-      <Link to="/blog" style={{ display: 'inline-block', margin: '26px 0 8px', color: 'var(--accent)', fontSize: '0.85rem', textDecoration: 'none' }}>← {t('blog.backToBlog')}</Link>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '22px 0 14px', flexWrap: 'wrap' }}>
+        <Link to="/" aria-label={t('nav.home')} style={{ display: 'inline-flex', textDecoration: 'none' }}>
+          <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" style={{ width: 176, display: 'block' }} />
+        </Link>
+        <div style={{ display: 'flex', gap: 18, fontSize: '0.85rem', alignItems: 'center' }}>
+          <Link to="/" style={{ color: 'var(--accent)', textDecoration: 'none' }}>{t('nav.home')}</Link>
+          <Link to="/blog" style={{ color: 'var(--text-dim)', textDecoration: 'none' }}>← {t('blog.backToBlog')}</Link>
+        </div>
+      </div>
       <div style={{ height: 4, borderRadius: 4, background: 'var(--primary-grad)', margin: '6px 0 18px' }} />
       <div className="pill-row" style={{ marginBottom: 12 }}>
         {(article.tags || []).map((tg) => <span key={tg} className="badge badge-primary">{tg}</span>)}
