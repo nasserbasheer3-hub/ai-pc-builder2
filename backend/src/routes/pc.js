@@ -41,12 +41,13 @@ function logEngine(feature, userId) {
 }
 
 function buildPartsDisplay(config) {
+  const detail = partsDetail(config || {}, null);
   const parts = {};
-  for (const [key, table] of Object.entries(PART_TABLES)) {
-    const id = parseId(config[key]);
-    if (!id) continue;
-    const row = db.prepare(`SELECT name, price_usd FROM ${table} WHERE id=?`).get(id);
-    if (row) parts[key] = { name: row.name, price: row.price_usd, reason: 'Saved configuration' };
+  for (const [key, row] of Object.entries(detail)) {
+    parts[key] = {
+      name: row.name, price: row.price_usd, reason: 'Saved configuration',
+      spec: row.spec || null, price_date: row.price_date || null, store: row.store || null,
+    };
   }
   return parts;
 }
@@ -318,10 +319,12 @@ router.delete('/upgrades/:id', (req, res) => {
 // Wishlist ---------------------------------------------------------------
 function enrichWish(row) {
   const part = resolvePart(row.part_type, row.part_id);
+  const detail = partsDetail({ [row.part_type]: row.part_id }, null)[row.part_type] || {};
   return {
     id: row.id, part_type: row.part_type, part_label: PART_LABELS[row.part_type],
     part_id: row.part_id, name: part ? part.name : 'Unknown part', price_usd: part ? part.price_usd : null,
-    spec: part ? (partsDetail({ [row.part_type]: row.part_id })[row.part_type]?.spec || null) : null,
+    spec: detail.spec || null, price_date: detail.price_date || null,
+    store: detail.store || null,
     note: row.note, created_at: row.created_at,
   };
 }

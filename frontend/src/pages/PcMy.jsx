@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { getHardwareCategory } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, DataTag, Spinner, EmptyState, Modal, useToast } from '../components/ui.jsx';
+import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
 
 const PART_TYPES = ['cpu', 'gpu', 'motherboard', 'ram', 'storage', 'psu', 'case', 'cooler'];
 const TYPE_CAT = {
@@ -292,13 +293,18 @@ export default function PcMy() {
           <div style={{ marginTop: 12 }}>
             {data.wishlist.map((w) => (
               <div key={w.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '9px 0', borderBottom: '1px dashed var(--border)', fontSize: '0.86rem' }}>
+                <PartImage part={{ category: w.part_type }} size={26} />
                 <Badge tone="warn">{w.part_label}</Badge>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <b>{w.name}</b>
                   {w.spec && <span style={{ color: 'var(--text-faint)', marginLeft: 8, fontSize: '0.8rem' }}>{w.spec}</span>}
                   {w.note && <span style={{ color: 'var(--text-dim)' }}> · {w.note}</span>}
                 </div>
-                <span style={{ marginLeft: 'auto', fontWeight: 700 }}>{w.price_usd ? `$${w.price_usd}` : '—'}</span>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontWeight: 700 }}>{w.price_usd ? `$${w.price_usd}` : '—'}</span>
+                  <RefDate date={w.price_date} />
+                </div>
+                <StoreLinks store={w.store} name={w.name} />
                 <button className="btn btn-danger btn-sm" onClick={() => delWish(w.id)}>✕</button>
               </div>
             ))}

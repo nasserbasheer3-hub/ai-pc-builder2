@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { getGames } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, DataTag, Spinner, EmptyState, useToast, LoadingBlock } from '../components/ui.jsx';
+import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
 import { track } from '../utils/analytics.js';
 
 const CATEGORIES = [
@@ -191,12 +192,19 @@ export default function PcBuilder() {
                       const p = result.parts[key];
                       if (!p) return null;
                       return (
-                        <div key={key} style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                            <div><span style={{ fontSize: '0.72rem', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t(label)}</span><div style={{ fontWeight: 600 }}>{p.name}</div></div>
-                            <div style={{ whiteSpace: 'nowrap', fontWeight: 700, color: 'var(--primary-2)' }}>{p.price} {result.currency}</div>
+                        <div key={key} style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <PartImage part={{ category: key }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                              <div><span style={{ fontSize: '0.72rem', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t(label)}</span><div style={{ fontWeight: 600 }}>{p.name}</div></div>
+                              <div style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                                <div style={{ fontWeight: 700, color: 'var(--primary-2)' }}>{p.price} {result.currency}</div>
+                                <RefDate date={p.price_date} />
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '0.76rem', color: 'var(--text-faint)', marginTop: 4 }}>{p.reason}</div>
+                            <StoreLinks store={p.store} name={p.name} />
                           </div>
-                          <div style={{ fontSize: '0.76rem', color: 'var(--text-faint)', marginTop: 4 }}>{p.reason}</div>
                         </div>
                       );
                     })}

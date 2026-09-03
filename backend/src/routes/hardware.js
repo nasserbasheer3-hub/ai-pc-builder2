@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { ok } from '../utils/helpers.js';
+import { storeSearchLinks } from '../utils/partStore.js';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ router.get('/', (req, res) => {
     else if (sort === 'price_desc') sql += ' ORDER BY price_usd DESC';
     else if (sort === 'index' && (col === 'cpus' || col === 'gpus')) sql += ' ORDER BY performance_index DESC';
     else sql += ' ORDER BY name ASC';
-    const items = db.prepare(sql).all(...params);
+    const items = db.prepare(sql).all(...params).map((r) => ({ ...r, category, store: storeSearchLinks(r.name) }));
     return ok(res, { items, label: table.label, priceNote: 'Prices are approximate aggregate street estimates (USD/EUR/GBP) dated 2025-06-15.' });
   }
   // list all categories with counts
@@ -58,7 +59,8 @@ router.get('/:category/:id', (req, res) => {
   const item = db.prepare(`SELECT ${table.columns} FROM ${col} WHERE id=? AND enabled=1`).get(req.params.id);
   if (!item) return ok(res, { item: null, message: 'Not found.' });
   const source = db.prepare('SELECT name FROM data_sources WHERE id=?').get(item.source_id || item.sourceId);
-  return ok(res, { item, source: source ? source.name : null });
+  const item2 = { ...item, category, store: storeSearchLinks(item.name) };
+  return ok(res, { item: item2, source: source ? source.name : null });
 });
 
 export default router;

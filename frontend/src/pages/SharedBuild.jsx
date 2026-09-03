@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { getGames } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, DataTag, Spinner, EmptyState, useToast } from '../components/ui.jsx';
+import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
 import { useSeo } from '../hooks/useSeo.js';
 import { track } from '../utils/analytics.js';
 
@@ -155,13 +156,20 @@ export default function SharedBuild() {
             const p = build.parts[k];
             const price = p.price != null ? fmtMoney(p.price, cur) : (p.price_usd != null ? `$${p.price_usd}` : null);
             return (
-              <div key={k} className="card pad-sm" style={{ margin: 0, background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', inset: '0 auto 0 0', width: 3, background: `linear-gradient(180deg, hsl(${i * 45}, 70%, 60%), hsl(${i * 45 + 60}, 70%, 45%))` }} />
-                <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-faint)' }}>{LABEL[k]}</div>
-                <div style={{ fontWeight: 650, fontSize: '0.9rem', lineHeight: 1.3, margin: '4px 0' }}>{p.name}</div>
-                {p.spec && <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>{p.spec}</div>}
-                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--primary-2)', marginTop: 6 }}>{price}</div>
-              </div>
+                <div key={k} className="card pad-sm" style={{ margin: 0, background: 'rgba(0,0,0,0.25)', border: '1px solid var(--border)', position: 'relative', overflow: 'hidden', display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <div style={{ position: 'absolute', inset: '0 auto 0 0', width: 3, background: `linear-gradient(180deg, hsl(${i * 45}, 70%, 60%), hsl(${i * 45 + 60}, 70%, 45%))` }} />
+                  <PartImage part={{ category: k }} size={32} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-faint)' }}>{LABEL[k]}</div>
+                    <div style={{ fontWeight: 650, fontSize: '0.9rem', lineHeight: 1.3, margin: '2px 0' }}>{p.name}</div>
+                    {p.spec && <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>{p.spec}</div>}
+                    <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--primary-2)', marginTop: 5 }}>
+                      {price}
+                      <RefDate date={p.price_date} />
+                    </div>
+                    <StoreLinks store={p.store} name={p.name} />
+                  </div>
+                </div>
             );
           })}
         </div>

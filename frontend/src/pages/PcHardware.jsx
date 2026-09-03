@@ -3,16 +3,36 @@ import { api } from '../api/client.js';
 import { getHardwareCategories, getHardwareCategory } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, Badge, useToast, LoadingBlock } from '../components/ui.jsx';
+import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
+
+function NameCell({ i }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <PartImage part={{ category: i.category }} size={26} />
+      <span style={{ fontWeight: 600 }}>{i.name}</span>
+    </div>
+  );
+}
+
+function PriceCell({ i }) {
+  const p = i.price_usd;
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <div>{p != null ? <Badge tone="primary">${p}</Badge> : <span style={{ color: 'var(--text-faint)' }}>—</span>}</div>
+      <RefDate date={i.price_date} />
+    </div>
+  );
+}
 
 const FIELDS = {
-  cpus: { cols: ['pchw.col.name', 'pchw.col.coresThreads', 'pchw.col.boost', 'pchw.col.tdp', 'pchw.col.index', 'pchw.col.price'], render: (i, t, y) => [i.name, `${i.cores}C/${i.threads}T`, `${i.boost_clock_ghz}GHz`, `${i.tdp_watts}W`, i.performance_index, fmtPrice(i)] },
-  gpus: { cols: ['pchw.col.name', 'pchw.col.vram', 'pchw.col.tdp', 'pchw.col.index', 'pchw.col.price'], render: (i, t, y) => [i.name, `${i.vram_gb}GB`, `${i.tdp_watts}W`, i.performance_index, fmtPrice(i)] },
-  motherboards: { cols: ['pchw.col.name', 'pchw.col.socket', 'pchw.col.chipset', 'pchw.col.ram', 'pchw.col.formFactor', 'pchw.col.price'], render: (i, t, y) => [i.name, i.socket, i.chipset, `${i.ram_type} · ${i.ram_slots} slots`, i.form_factor, fmtPrice(i)] },
-  ram: { cols: ['pchw.col.name', 'pchw.col.type', 'pchw.col.capacity', 'pchw.col.speed', 'pchw.col.price'], render: (i, t, y) => [i.name, i.type, `${i.capacity_gb}GB`, `${i.speed_mhz}MHz`, fmtPrice(i)] },
-  storage: { cols: ['pchw.col.name', 'pchw.col.interface', 'pchw.col.capacity', 'pchw.col.read', 'pchw.col.price'], render: (i, t, y) => [i.name, i.interface, `${i.capacity_gb}GB`, i.read_mbps ? `${i.read_mbps} MB/s` : '—', fmtPrice(i)] },
-  psus: { cols: ['pchw.col.name', 'pchw.col.wattage', 'pchw.col.efficiency', 'pchw.col.8pin', '12VHPWR', 'pchw.col.price'], render: (i, t, y) => [i.name, `${i.wattage}W`, i.efficiency_rating, i.pcie_connectors_8pin, i.has_12vhpwr ? y('pchw.yes') : y('pchw.no'), fmtPrice(i)] },
-  cases: { cols: ['pchw.col.name', 'pchw.col.formFactors', 'pchw.col.maxGpu', 'pchw.col.maxCooler', 'pchw.col.price'], render: (i, t, y) => [i.name, i.form_factors, `${i.max_gpu_length_mm}mm`, `${i.max_cooler_height_mm}mm`, fmtPrice(i)] },
-  coolers: { cols: ['pchw.col.name', 'pchw.col.type', 'pchw.col.sockets', 'pchw.col.height', 'pchw.col.price'], render: (i, t, y) => [i.name, i.type, i.socket_support, i.height_mm ? `${i.height_mm}mm` : '—', fmtPrice(i)] },
+  cpus: { cols: ['pchw.col.name', 'pchw.col.coresThreads', 'pchw.col.boost', 'pchw.col.tdp', 'pchw.col.index', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, `${i.cores}C/${i.threads}T`, `${i.boost_clock_ghz}GHz`, `${i.tdp_watts}W`, i.performance_index, <PriceCell key="p" i={i} />] },
+  gpus: { cols: ['pchw.col.name', 'pchw.col.vram', 'pchw.col.tdp', 'pchw.col.index', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, `${i.vram_gb}GB`, `${i.tdp_watts}W`, i.performance_index, <PriceCell key="p" i={i} />] },
+  motherboards: { cols: ['pchw.col.name', 'pchw.col.socket', 'pchw.col.chipset', 'pchw.col.ram', 'pchw.col.formFactor', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, i.socket, i.chipset, `${i.ram_type} · ${i.ram_slots} slots`, i.form_factor, <PriceCell key="p" i={i} />] },
+  ram: { cols: ['pchw.col.name', 'pchw.col.type', 'pchw.col.capacity', 'pchw.col.speed', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, i.type, `${i.capacity_gb}GB`, `${i.speed_mhz}MHz`, <PriceCell key="p" i={i} />] },
+  storage: { cols: ['pchw.col.name', 'pchw.col.interface', 'pchw.col.capacity', 'pchw.col.read', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, i.interface, `${i.capacity_gb}GB`, i.read_mbps ? `${i.read_mbps} MB/s` : '—', <PriceCell key="p" i={i} />] },
+  psus: { cols: ['pchw.col.name', 'pchw.col.wattage', 'pchw.col.efficiency', 'pchw.col.8pin', '12VHPWR', 'pchw.col.price'], render: (i, t, y) => [<NameCell key="n" i={i} />, `${i.wattage}W`, i.efficiency_rating, i.pcie_connectors_8pin, i.has_12vhpwr ? y('pchw.yes') : y('pchw.no'), <PriceCell key="p" i={i} />] },
+  cases: { cols: ['pchw.col.name', 'pchw.col.formFactors', 'pchw.col.maxGpu', 'pchw.col.maxCooler', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, i.form_factors, `${i.max_gpu_length_mm}mm`, `${i.max_cooler_height_mm}mm`, <PriceCell key="p" i={i} />] },
+  coolers: { cols: ['pchw.col.name', 'pchw.col.type', 'pchw.col.sockets', 'pchw.col.height', 'pchw.col.price'], render: (i) => [<NameCell key="n" i={i} />, i.type, i.socket_support, i.height_mm ? `${i.height_mm}mm` : '—', <PriceCell key="p" i={i} />] },
 };
 
 export default function PcHardware() {
@@ -91,7 +111,10 @@ export default function PcHardware() {
                   <tr key={i.id}>
                     {spec.render(i, t, t).map((v, k) => <td key={k}>{v}</td>)}
                     <td>
-                      <a className="btn btn-ghost btn-sm" href={`/pc/compare?category=${active}&a=${i.id}`}>{t('pchw.compare')}</a>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <StoreLinks store={i.store} name={i.name} />
+                        <a className="btn btn-ghost btn-sm" href={`/pc/compare?category=${active}&a=${i.id}`}>{t('pchw.compare')}</a>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -103,9 +126,4 @@ export default function PcHardware() {
       </Card>
     </div>
   );
-}
-
-function fmtPrice(i) {
-  const p = i.price_usd;
-  return p != null ? <Badge tone="primary">${p}</Badge> : <span style={{ color: 'var(--text-faint)' }}>—</span>;
 }

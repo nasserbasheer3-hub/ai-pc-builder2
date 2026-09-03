@@ -3,6 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useToast, LoadingBlock } from '../components/ui.jsx';
+import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
 import { useSeo } from '../hooks/useSeo.js';
 
 const BEST_FN = {
@@ -192,6 +193,7 @@ export default function Compare() {
                 </select>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: 6, minHeight: 32 }}>
                   {sel ? (sel.brand ? `${sel.brand} · ` : '') + (sel.price_usd ? `$${sel.price_usd}` : t('compare.noPrice')) : ''}
+                  {sel && <RefDate date={sel.price_date} />}
                 </div>
               </div>
             ))}
@@ -208,7 +210,16 @@ export default function Compare() {
                 <thead>
                   <tr>
                     <th style={{ minWidth: 150 }}>{t('compare.spec')}</th>
-                    {chosen.map((c) => <th key={c.id}>{c.name}</th>)}
+                    {chosen.map((c) => (
+                      <th key={c.id} style={{ minWidth: 190 }}>
+                        <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+                          <PartImage part={{ category: c.category }} size={24} />
+                          <b style={{ fontSize: '0.84rem', lineHeight: 1.25 }}>{c.name}</b>
+                        </div>
+                        <div style={{ marginTop: 3 }}><RefDate date={c.price_date} /></div>
+                        <StoreLinks store={c.store} name={c.name} />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>

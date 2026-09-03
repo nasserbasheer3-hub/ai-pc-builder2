@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { storeSearchLinks } from '../utils/partStore.js';
 
 export const PART_TABLES = {
   cpu: 'cpus', gpu: 'gpus', motherboard: 'motherboards', ram: 'memory_modules',
@@ -47,6 +48,8 @@ export function partsDetail(config, currency) {
     parts[key] = {
       id, name: row.name, price_usd: row.price_usd, spec: specLine(key, row) || null,
       price: currency ? Math.round(localPrice(row, currency)) : row.price_usd,
+      price_date: row.price_date || null,
+      store: storeSearchLinks(row.name, currency || 'USD'),
     };
   }
   return parts;

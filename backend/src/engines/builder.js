@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { checkCompatibility } from './compatibility.js';
 import { estimateFps } from './fps.js';
+import { storeSearchLinks } from '../utils/partStore.js';
 
 const FX = { USD: 1, EUR: 1.09, GBP: 1.27 };
 
@@ -129,14 +130,14 @@ export function buildPc(input) {
     status: 'ready',
     config,
     parts: {
-      cpu: { id: parts.cpu.id, name: parts.cpu.name, price: parts.cpu.p, reason: explanations[0].text },
-      gpu: { id: parts.gpu.id, name: parts.gpu.name, price: parts.gpu.p, reason: explanations[1].text },
-      motherboard: { id: parts.mb.id, name: parts.mb.name, price: parts.mb.p, reason: explanations[2].text },
-      ram: { id: parts.ram.id, name: parts.ram.name, price: parts.ram.p, reason: explanations[3].text },
-      storage: { id: parts.storage.id, name: parts.storage.name, price: parts.storage.p, reason: explanations[4].text },
-      psu: { id: parts.psu.id, name: parts.psu.name, price: parts.psu.p, reason: explanations[5].text },
-      case: { id: parts.pcCase.id, name: parts.pcCase.name, price: parts.pcCase.p, reason: explanations[6].text },
-      cooler: { id: parts.cooler.id, name: parts.cooler.name, price: parts.cooler.p, reason: explanations[7].text },
+      cpu: { id: parts.cpu.id, name: parts.cpu.name, price: parts.cpu.p, price_date: parts.cpu.price_date || null, store: storeSearchLinks(parts.cpu.name, currency), reason: explanations[0].text },
+      gpu: { id: parts.gpu.id, name: parts.gpu.name, price: parts.gpu.p, price_date: parts.gpu.price_date || null, store: storeSearchLinks(parts.gpu.name, currency), reason: explanations[1].text },
+      motherboard: { id: parts.mb.id, name: parts.mb.name, price: parts.mb.p, price_date: parts.mb.price_date || null, store: storeSearchLinks(parts.mb.name, currency), reason: explanations[2].text },
+      ram: { id: parts.ram.id, name: parts.ram.name, price: parts.ram.p, price_date: parts.ram.price_date || null, store: storeSearchLinks(parts.ram.name, currency), reason: explanations[3].text },
+      storage: { id: parts.storage.id, name: parts.storage.name, price: parts.storage.p, price_date: parts.storage.price_date || null, store: storeSearchLinks(parts.storage.name, currency), reason: explanations[4].text },
+      psu: { id: parts.psu.id, name: parts.psu.name, price: parts.psu.p, price_date: parts.psu.price_date || null, store: storeSearchLinks(parts.psu.name, currency), reason: explanations[5].text },
+      case: { id: parts.pcCase.id, name: parts.pcCase.name, price: parts.pcCase.p, price_date: parts.pcCase.price_date || null, store: storeSearchLinks(parts.pcCase.name, currency), reason: explanations[6].text },
+      cooler: { id: parts.cooler.id, name: parts.cooler.name, price: parts.cooler.p, price_date: parts.cooler.price_date || null, store: storeSearchLinks(parts.cooler.name, currency), reason: explanations[7].text },
     },
     totalPrice: Math.round(total),
     budget,
