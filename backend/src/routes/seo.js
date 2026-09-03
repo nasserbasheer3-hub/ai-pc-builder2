@@ -31,6 +31,11 @@ router.get('/sitemap.xml', (req, res) => {
   const staticUrls = [
     { loc: '/', pri: '1.0' },
     { loc: '/blog', pri: '0.9' },
+    { loc: '/pricing', pri: '0.9' },
+    { loc: '/try', pri: '0.8' },
+    { loc: '/pc/bottleneck', pri: '0.8' },
+    { loc: '/pc/psu', pri: '0.8' },
+    { loc: '/pc/gamecheck', pri: '0.8' },
     { loc: '/signup', pri: '0.8' },
     { loc: '/login', pri: '0.5' },
     { loc: '/pc/hardware', pri: '0.9' },
