@@ -12,7 +12,7 @@ import { db, now } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { ok, fail, parseId, sha256 } from '../utils/helpers.js';
 import { grantCredits, deductCredits, getWallet, getActivePlan, ensureFreePlan } from '../services/credits.js';
-import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan } from '../services/payments.js';
+import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan, revokeTopupCredits } from '../services/payments.js';
 import { adminReferralSummary } from '../services/referrals.js';
 
 const router = Router();
@@ -744,7 +744,8 @@ router.put('/offers/:id', (req, res) => {
 
 router.get('/refunds', (req, res) => {
   const refunds = db.prepare(`
-    SELECT r.*, u.username, u.email, p.amount_sek as payment_amount, p.method, p.status as payment_status, pl.name as plan_name
+    SELECT r.*, u.username, u.email, p.amount_sek as payment_amount, p.method, p.status as payment_status,
+           CASE WHEN p.kind = 'credits_topup' THEN 'Credits top-up' ELSE pl.name END as plan_name
     FROM refunds r
     JOIN users u ON u.id = r.user_id
     JOIN payments p ON p.id = r.payment_id
@@ -784,6 +785,9 @@ router.post('/refunds/:id/process', async (req, res) => {
         .run(now(), now(), sub.id);
       ensureFreePlan(payment.user_id);
     }
+    if (payment.kind === 'credits_topup') {
+      revokeTopupCredits(payment.id);
+    }
     audit(req.admin, 'refund_approve', 'refund', id, { paymentId: payment.id, amount: refund.amount_sek });
     ok(res, { refund: db.prepare('SELECT * FROM refunds WHERE id=?').get(id) });
   } catch (e) {
@@ -821,6 +825,9 @@ router.post('/payments/:id/refund', async (req, res) => {
       db.prepare(`UPDATE subscriptions SET status = 'refunded', cancelled_at = ?, updated_at = ? WHERE id = ?`)
         .run(now(), now(), sub.id);
       ensureFreePlan(payment.user_id);
+    }
+    if (payment.kind === 'credits_topup') {
+      revokeTopupCredits(payment.id);
     }
     audit(req.admin, 'refund_approve', 'refund', refundId, { paymentId: payment.id, amount: payment.amount_sek });
     ok(res, { refund: db.prepare('SELECT * FROM refunds WHERE id=?').get(refundId) });
@@ -917,7 +924,8 @@ router.get('/billing-stats', (req, res) => {
   `).get();
   const recentPayments = db.prepare(`
     SELECT pay.id, pay.amount_sek, pay.method, pay.status, pay.paid_at, pay.created_at,
-           u.username, u.email, p.name as plan_name
+           u.username, u.email,
+           CASE WHEN pay.kind = 'credits_topup' THEN 'Credits top-up' ELSE p.name END as plan_name
     FROM payments pay
     JOIN users u ON u.id = pay.user_id
     LEFT JOIN plans p ON p.id = pay.plan_id

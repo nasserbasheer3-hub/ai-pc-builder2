@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { config } from '../config.js';
 import { db, now } from '../db.js';
-import { grantCredits, getActivePlan, ensureFreePlan, getWallet } from './credits.js';
+import { grantCredits, deductCredits, getActivePlan, ensureFreePlan, getWallet } from './credits.js';
 import { rewardSubscriptionReferral } from './referrals.js';
 
 let stripeClient = null;
@@ -469,6 +469,154 @@ export function markSubscriptionDeleted(stripeSubscriptionId) {
 }
 
 // ---------------------------------------------------------------------------
+// One-time credits top-up
+//
+// A user can buy an extra block of AI credits with a SINGLE payment (Stripe
+// Checkout mode 'payment', no subscription). The unit price drops as the
+// purchased quantity grows, so larger top-ups are cheaper per credit while the
+// price always rises with the total quantity. These credits never expire and
+// do not affect the user's subscription.
+// ---------------------------------------------------------------------------
+
+const TOPUP_LIMITS = { min: 100, max: 100000 };
+const TOPUP_TIERS = [
+  { upTo: 250, rate: 0.40 },
+  { upTo: 1000, rate: 0.35 },
+  { upTo: 5000, rate: 0.30 },
+  { upTo: 20000, rate: 0.26 },
+  { upTo: Number.POSITIVE_INFINITY, rate: 0.24 },
+];
+
+export function creditsTopupInfo() {
+  return {
+    ...TOPUP_LIMITS,
+    currency: 'SEK',
+    tiers: TOPUP_TIERS.map((t) => ({ upTo: Number.isFinite(t.upTo) ? t.upTo : null, rate: t.rate })),
+  };
+}
+
+export function quoteCreditsTopup(credits) {
+  const q = Math.trunc(Number(credits) || 0);
+  if (!Number.isInteger(q) || q <= 0) return null;
+  if (q < TOPUP_LIMITS.min || q > TOPUP_LIMITS.max) return null;
+  let cursor = 0;
+  let total = 0;
+  for (const tier of TOPUP_TIERS) {
+    const top = Math.min(tier.upTo, q);
+    if (top <= cursor) continue;
+    total += Math.round((top - cursor) * tier.rate);
+    cursor = top;
+    if (cursor >= q) break;
+  }
+  const price = Math.max(1, total);
+  return { credits: q, price, currency: 'SEK', perCredit: Math.round((price / q) * 100) / 100 };
+}
+
+export async function createCreditsTopupCheckout({ user, credits, method = 'card', origin }) {
+  const quote = quoteCreditsTopup(credits);
+  if (!quote) {
+    const err = new Error(`Choose between ${TOPUP_LIMITS.min} and ${TOPUP_LIMITS.max} credits.`);
+    err.code = 'VALIDATION';
+    err.status = 400;
+    throw err;
+  }
+
+  const pay = db.prepare(`
+    INSERT INTO payments (user_id, plan_id, amount_sek, original_amount_sek, currency, method, status, kind, credits, created_at)
+    VALUES (?, NULL, ?, ?, 'SEK', ?, 'pending', 'credits_topup', ?, ?)
+  `).run(user.id, quote.price, quote.price, method, quote.credits, now());
+  const paymentId = Number(pay.lastInsertRowid);
+
+  const stripe = getStripe();
+  if (!stripe && demoPaymentsEnabled()) {
+    db.prepare(`UPDATE payments SET provider_ref = ? WHERE id = ?`).run(`demo_${paymentId}`, paymentId);
+    const payment = grantTopupCredits(paymentId);
+    return { mode: 'activated', paymentId, payment, wallet: getWallet(user.id), demo: true };
+  }
+  if (!stripe) {
+    db.prepare(`UPDATE payments SET status = 'requires_gateway', error = ? WHERE id = ?`)
+      .run('Stripe keys are not configured. Set STRIPE_SECRET_KEY in the backend environment.', paymentId);
+    const err = new Error('Live payment is not configured yet. Ask an administrator to add Stripe keys.');
+    err.code = 'PAYMENT_UNAVAILABLE';
+    err.status = 503;
+    throw err;
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: user.email,
+    client_reference_id: String(paymentId),
+    payment_method_types: ['card'],
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'sek',
+        unit_amount: sekToMinor(quote.price),
+        product_data: {
+          name: `${quote.credits} AI credits — one-time`,
+          description: 'Extra ApexCore AI credits. One-time payment, no subscription. These credits never expire.',
+          metadata: { kind: 'credits_topup', credits: String(quote.credits) },
+        },
+      },
+    }],
+    metadata: {
+      paymentId: String(paymentId),
+      userId: String(user.id),
+      credits: String(quote.credits),
+      kind: 'credits_topup',
+      method,
+    },
+    success_url: `${origin}/pricing?checkout=success&payment=${paymentId}`,
+    cancel_url: `${origin}/pricing?checkout=cancel&payment=${paymentId}`,
+    locale: 'auto',
+  });
+
+  db.prepare(`UPDATE payments SET checkout_session_id = ?, provider_ref = ? WHERE id = ?`)
+    .run(session.id, session.id, paymentId);
+
+  return { mode: 'checkout', url: session.url, paymentId, sessionId: session.id };
+}
+
+// Mark a credits top-up payment as paid and grant its credits exactly once.
+export function grantTopupCredits(paymentId) {
+  const grant = db.transaction(() => {
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
+    if (!payment || payment.kind !== 'credits_topup') return payment;
+    if (payment.credits_granted) return payment;
+    if (payment.status !== 'paid') {
+      db.prepare(`UPDATE payments SET status = 'paid', paid_at = ? WHERE id = ?`)
+        .run(now(), paymentId);
+    }
+    const n = Math.trunc(Number(payment.credits) || 0);
+    if (n > 0) {
+      grantCredits(payment.user_id, n, 'credits_topup', { refType: 'payment', refId: paymentId });
+    }
+    db.prepare(`UPDATE payments SET credits_granted = 1 WHERE id = ?`).run(paymentId);
+    return db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
+  });
+  return grant();
+}
+
+// After an approved refund of a top-up payment, take the purchased credits back
+// out of the wallet (only what was actually granted, never more than the
+// current balance). Safe to call more than once.
+export function revokeTopupCredits(paymentId) {
+  const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
+  if (!payment || payment.kind !== 'credits_topup') return payment;
+  const granted = db.prepare(`
+    SELECT COALESCE(SUM(delta), 0) s FROM credit_ledger
+    WHERE user_id = ? AND ref_type = 'payment' AND ref_id = ? AND reason = 'credits_topup'
+  `).get(payment.user_id, paymentId).s;
+  const already = db.prepare(`
+    SELECT id FROM credit_ledger
+    WHERE user_id = ? AND ref_type = 'payment' AND ref_id = ? AND reason = 'credits_topup_refund'
+  `).get(payment.user_id, paymentId);
+  if (already || !(granted > 0)) return payment;
+  deductCredits(payment.user_id, -granted, 'credits_topup_refund', { refType: 'payment', refId: paymentId });
+  return db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
+}
+
+// ---------------------------------------------------------------------------
 // Checkout
 // ---------------------------------------------------------------------------
 
@@ -664,7 +812,7 @@ export async function handleStripeEvent(event) {
       await syncStripeSubscription({ stripeSubscriptionId: object.subscription, session: object });
       return;
     }
-    // Legacy one-time checkouts.
+    // Legacy one-time checkouts (one-time plans and credits top-ups).
     const paymentId = Number(object.metadata?.paymentId || object.client_reference_id);
     if (!paymentId) return;
     const payment = db.prepare('SELECT * FROM payments WHERE id = ?').get(paymentId);
@@ -672,6 +820,10 @@ export async function handleStripeEvent(event) {
     if (object.payment_status !== 'paid' && object.status !== 'complete') return;
     db.prepare('UPDATE payments SET provider_ref = ? WHERE id = ?')
       .run(object.payment_intent || object.id, paymentId);
+    if (payment.kind === 'credits_topup') {
+      grantTopupCredits(paymentId);
+      return;
+    }
     fulfillPayment(paymentId);
     return;
   }
@@ -722,6 +874,9 @@ export async function handleStripeEvent(event) {
     const payment = db.prepare('SELECT * FROM payments WHERE provider_charge_ref = ? OR provider_ref = ? OR checkout_session_id = ?').get(pi, pi, pi);
     if (!payment) return;
     db.prepare(`UPDATE payments SET status = 'refunded' WHERE id = ? AND status = 'paid'`).run(payment.id);
+    if (payment.kind === 'credits_topup') {
+      revokeTopupCredits(payment.id);
+    }
     return;
   }
 }

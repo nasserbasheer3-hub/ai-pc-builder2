@@ -528,6 +528,38 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4 {
 .pricing-warn { color: #fbbf24; }
 .pricing-refunds { margin-top: 28px; }
 .pricing-refunds h3 { margin: 0 0 12px; font-size: 1rem; }
+.pricing-topup {
+  margin: 22px 0 6px;
+  border-color: rgba(124, 92, 255, 0.35);
+}
+.pricing-topup h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.pricing-topup .pricing-note { margin-bottom: 8px; }
+.pricing-topup-volume { color: var(--primary-2); }
+.pricing-topup-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 360px;
+  margin: 10px 0;
+}
+.pricing-topup-row .pricing-pay-label { margin-bottom: 6px; }
+.pricing-topup-row .input { width: 140px; }
+.pricing-topup-quote {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 6px 0 12px;
+}
+.pricing-topup-total b {
+  font-size: 1.6rem;
+  background: var(--primary-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.pricing-topup-total span { color: var(--text-dim); font-size: 0.8rem; margin-inline-start: 6px; }
+.pricing-topup-per { color: var(--text-dim); font-size: 0.85rem; }
 
 
 

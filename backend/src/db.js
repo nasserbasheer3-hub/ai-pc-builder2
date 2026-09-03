@@ -801,6 +801,13 @@ export function migrate() {
     if (!payCols3.includes('renewal_granted')) db.exec('ALTER TABLE payments ADD COLUMN renewal_granted INTEGER NOT NULL DEFAULT 0');
     if (!payCols3.includes('referral_rewarded')) db.exec('ALTER TABLE payments ADD COLUMN referral_rewarded INTEGER NOT NULL DEFAULT 0');
 
+    // --- One-time credits top-up (buy extra AI credits with a single payment) ---
+    const payCols4 = db.prepare('PRAGMA table_info(payments)').all().map((c) => c.name);
+    if (!payCols4.includes('kind')) db.exec("ALTER TABLE payments ADD COLUMN kind TEXT NOT NULL DEFAULT 'plan'");
+    if (!payCols4.includes('credits')) db.exec('ALTER TABLE payments ADD COLUMN credits INTEGER');
+    if (!payCols4.includes('credits_granted')) db.exec('ALTER TABLE payments ADD COLUMN credits_granted INTEGER NOT NULL DEFAULT 0');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_payments_kind_user ON payments(kind, user_id, id DESC)');
+
     // Cache of Stripe recurring Prices we have created per plan/amount so a
     // plan is only ever mirrored into Stripe once per price point.
     db.exec(`

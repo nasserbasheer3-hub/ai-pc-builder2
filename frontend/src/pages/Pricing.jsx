@@ -12,6 +12,8 @@ const METHODS = [
   { id: 'klarna', labelKey: 'pricing.klarna' },
 ];
 
+const TOPUP_PRESETS = [100, 250, 500, 1000, 2500, 5000, 10000];
+
 export default function Pricing() {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -26,6 +28,10 @@ export default function Pricing() {
   const [manageBusy, setManageBusy] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [refunding, setRefunding] = useState(null);
+  const [topupQty, setTopupQty] = useState(500);
+  const [topupQuote, setTopupQuote] = useState(null);
+  const [topupErr, setTopupErr] = useState(null);
+  const [topupBusy, setTopupBusy] = useState(false);
 
   const refreshMe = () => {
     if (!user) { setMe(null); return Promise.resolve(); }
@@ -40,6 +46,26 @@ export default function Pricing() {
   }, []);
 
   useEffect(() => { refreshMe(); }, [user]);
+
+  const topupMin = data?.topup?.min ?? 100;
+  const topupMax = data?.topup?.max ?? 100000;
+
+  useEffect(() => {
+    let active = true;
+    setTopupErr(null);
+    setTopupQuote(null);
+    const n = Math.trunc(Number(topupQty) || 0);
+    if (!Number.isInteger(n) || n < topupMin || n > topupMax) {
+      if (n && (n < topupMin || n > topupMax)) setTopupErr(t('pricing.topupRange', { min: topupMin, max: topupMax }));
+      return undefined;
+    }
+    const h = setTimeout(() => {
+      api.get(`/billing/topup-quote?credits=${n}`)
+        .then((q) => { if (active) setTopupQuote(q); })
+        .catch((e) => { if (active) { setTopupErr(e.message); setTopupQuote(null); } });
+    }, 180);
+    return () => { active = false; clearTimeout(h); };
+  }, [topupQty, topupMin, topupMax]);
 
   useEffect(() => {
     const checkout = params.get('checkout');
@@ -56,7 +82,7 @@ export default function Pricing() {
           const res = await api.get(`/billing/checkout/${paymentId}`);
           const pay = res.payment;
           if (pay?.status === 'paid') {
-            toast.ok(t('pricing.paid'));
+            toast.ok(pay.kind === 'credits_topup' ? t('pricing.topupPaid') : t('pricing.paid'));
             if (Number(pay.amount_sek) > 0) {
               trackPurchase({ transaction_id: pay.id, value: pay.amount_sek, currency: 'SEK' });
             } else {
@@ -96,6 +122,29 @@ export default function Pricing() {
       else toast.err(e.message);
     } finally {
       setBusy(null);
+    }
+  };
+
+  const buyTopup = async () => {
+    const quote = topupQuote;
+    if (!quote) return;
+    if (!user) { track('cta_click', { action: 'topup_requires_login', credits: quote.credits, value: quote.price, currency: 'SEK' }); navigate('/signup'); return; }
+    setTopupBusy(true);
+    track('begin_checkout', { item: 'credits_topup', credits: quote.credits, value: quote.price, currency: 'SEK' });
+    try {
+      const res = await api.post('/billing/topup', { credits: quote.credits, method: chosenMethod || 'card' });
+      if (res.mode === 'checkout' && res.url) {
+        window.location.assign(res.url);
+        return;
+      }
+      setMe((prev) => ({ ...(prev || {}), wallet: res.wallet }));
+      toast.ok(t('pricing.topupPaid'));
+      track('checkout_completed', { status: 'paid', item: 'credits_topup', credits: quote.credits, value: quote.price, currency: 'SEK' });
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'PAYMENT_UNAVAILABLE') toast.err(t('pricing.paymentUnavailable'));
+      else toast.err(e.message);
+    } finally {
+      setTopupBusy(false);
     }
   };
 
@@ -256,6 +305,52 @@ export default function Pricing() {
           );
         })}
       </div>
+      <Card className="pricing-topup">
+        <h3>{t('pricing.topupTitle')}</h3>
+        <p className="pricing-note">{t('pricing.topupIntro')}</p>
+        <p className="pricing-note pricing-topup-volume">{t('pricing.topupVolume')}</p>
+        <div className="chip-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+          {TOPUP_PRESETS.map((n) => (
+            <button key={n} type="button" className={`chip ${topupQty === n ? 'chip-on' : ''}`} onClick={() => { setTopupQty(n); setTopupQuote(null); }}>
+              {t('pricing.creditsShort', { n })}
+            </button>
+          ))}
+        </div>
+        <div className="pricing-topup-row">
+          <label className="pricing-pay-label" htmlFor="topupQty">{t('pricing.topupCustom')}</label>
+          <input
+            id="topupQty"
+            className="input"
+            type="number"
+            min={topupMin}
+            max={topupMax}
+            step={50}
+            value={topupQty}
+            onChange={(e) => setTopupQty(Number(e.target.value))}
+            autoComplete="off"
+          />
+        </div>
+        {topupErr ? <p className="pricing-note pricing-warn">{topupErr}</p> : null}
+        <div className="pricing-topup-quote">
+          {topupQuote ? (
+            <>
+              <div className="pricing-topup-total">
+                <b>{topupQuote.price} kr</b>
+                <span>{t('pricing.topupTotal')}</span>
+              </div>
+              <div className="pricing-topup-per">{t('pricing.topupPerCredit', { rate: topupQuote.perCredit })}</div>
+            </>
+          ) : (
+            <div className="pricing-note" style={{ color: 'var(--text-dim)' }}>{t('common.loading')}</div>
+          )}
+        </div>
+        <button className="btn btn-primary" disabled={!topupQuote || topupBusy} onClick={buyTopup}>
+          {topupQuote ? t('pricing.topupPay', { n: topupQuote.credits }) : t('pricing.topupButton')}
+        </button>
+        <p className="pricing-note" style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginTop: 10 }}>
+          {t('pricing.topupPolicyHint')} <Link to="/terms">{t('pricing.topupPolicyLink')}</Link>
+        </p>
+      </Card>
       <p className="pricing-note">{t('pricing.costsNote')}</p>
       {!user && (
         <div style={{ textAlign: 'center', marginTop: 18 }}>
@@ -278,8 +373,8 @@ export default function Pricing() {
               <tbody>
                 {paidPayments.map((p) => (
                   <tr key={p.id}>
-                    <td>{p.amount_sek} kr</td>
-                    <td>{p.method}</td>
+                    <td>{p.kind === 'credits_topup' ? `${t('pricing.creditsShort', { n: p.credits })} · ` : ''}{p.amount_sek} kr</td>
+                    <td>{p.method}{p.kind === 'credits_topup' ? ` · ${t('pricing.topupBadge')}` : ''}</td>
                     <td>{p.status}</td>
                     <td>
                       <button className="btn btn-sm btn-ghost" disabled={refunding === p.id} onClick={() => requestRefund(p.id)}>

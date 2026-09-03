@@ -1,7 +1,7 @@
 import { useI18n } from '../i18n/index.jsx';
 import { useSeo } from '../hooks/useSeo.js';
 
-const SECTION_COUNTS = { privacy: 9, terms: 10, about: 4 };
+const SECTION_COUNTS = { privacy: 10, terms: 11, about: 4 };
 
 function renderBody(body) {
   return String(body || '').split('\n\n').map((block, i) => {

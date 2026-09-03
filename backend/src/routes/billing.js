@@ -9,6 +9,7 @@ import {
   demoPaymentsEnabled, supportedPaymentMethods,
   syncStripeSubscription, cancelStripeSubscriptionNow, reactivateStripeSubscription,
   cancelScheduledSubscription,
+  creditsTopupInfo, quoteCreditsTopup, createCreditsTopupCheckout, grantTopupCredits,
 } from '../services/payments.js';
 import { config } from '../config.js';
 import { referralDiscountFor, referralStatsFor, referralEnabled } from '../services/referrals.js';
@@ -43,12 +44,61 @@ router.get('/plans', (req, res) => {
   ok(res, {
     plans,
     costs: creditCosts(),
+    topup: creditsTopupInfo(),
     currency: 'SEK',
     paymentMethods: supportedPaymentMethods(),
     stripeConfigured: isStripeConfigured(),
     demoEnabled: demoPaymentsEnabled() && !isStripeConfigured(),
     publishableKey: isStripeConfigured() ? (stripeKeys().publishable || '') : '',
   });
+});
+
+// Price quote for a one-time credits top-up (public, no login needed).
+router.get('/topup-quote', (req, res) => {
+  const credits = Math.trunc(Number(req.query?.credits) || 0);
+  const quote = quoteCreditsTopup(credits);
+  if (!quote) {
+    const info = creditsTopupInfo();
+    return fail(res, 400, 'VALIDATION', `Choose between ${info.min} and ${info.max} credits.`);
+  }
+  ok(res, quote);
+});
+
+// Buy extra AI credits as a one-time payment (Stripe Checkout, mode: payment).
+// No subscription is created; the purchased credits are added to the wallet
+// once the single charge succeeds.
+router.post('/topup', requireAuth, async (req, res) => {
+  const credits = Math.trunc(Number(req.body?.credits) || 0);
+  const method = String(req.body?.method || 'card').toLowerCase();
+  const allowed = new Set(supportedPaymentMethods());
+  const info = creditsTopupInfo();
+  if (!Number.isInteger(credits) || credits < info.min || credits > info.max) {
+    return fail(res, 400, 'VALIDATION', `Choose between ${info.min} and ${info.max} credits.`);
+  }
+  if (!allowed.has(method)) return fail(res, 400, 'VALIDATION', `Choose a supported payment method: ${[...allowed].join(', ')}.`);
+  try {
+    const result = await createCreditsTopupCheckout({
+      user: req.user,
+      credits,
+      method,
+      origin: checkoutOrigin(req),
+    });
+    if (result.mode === 'activated') {
+      return ok(res, {
+        mode: 'activated',
+        payment: result.payment,
+        wallet: result.wallet,
+        demo: Boolean(result.demo),
+      });
+    }
+    return ok(res, { mode: 'checkout', url: result.url, paymentId: result.paymentId });
+  } catch (e) {
+    if (e.code === 'PAYMENT_UNAVAILABLE' || e.code === 'VALIDATION') {
+      return fail(res, e.status || 503, e.code, e.message);
+    }
+    console.error('[billing.topup]', e.message);
+    return fail(res, 502, 'CHECKOUT_FAILED', 'Could not start checkout. Please try again.');
+  }
 });
 
 router.get('/me', requireAuth, (req, res) => {
@@ -72,7 +122,7 @@ router.get('/me', requireAuth, (req, res) => {
     plans: listActivePlans(),
     ledger: listLedger(req.user.id, 20),
     payments: db.prepare(`
-      SELECT id, plan_id, amount_sek, method, status, created_at, paid_at
+      SELECT id, plan_id, kind, credits, amount_sek, method, status, created_at, paid_at
       FROM payments WHERE user_id = ? ORDER BY id DESC LIMIT 20
     `).all(req.user.id),
   });
@@ -184,7 +234,11 @@ router.get('/checkout/:id', requireAuth, async (req, res) => {
           db.prepare(`UPDATE payments SET status = 'failed', error = ? WHERE id = ?`).run('checkout_expired', payment.id);
         }
       } else if (session.payment_status === 'paid' || session.status === 'complete') {
-        fulfillPayment(payment.id);
+        if (payment.kind === 'credits_topup') {
+          grantTopupCredits(payment.id);
+        } else {
+          fulfillPayment(payment.id);
+        }
       } else if (session.status === 'expired') {
         db.prepare(`UPDATE payments SET status = 'failed', error = ? WHERE id = ?`).run('checkout_expired', payment.id);
       }
@@ -193,7 +247,7 @@ router.get('/checkout/:id', requireAuth, async (req, res) => {
     }
   }
   ok(res, {
-    payment: db.prepare('SELECT id, amount_sek, method, status, paid_at, created_at FROM payments WHERE id = ?').get(paymentId),
+    payment: db.prepare('SELECT id, amount_sek, method, status, kind, credits, paid_at, created_at FROM payments WHERE id = ?').get(paymentId),
     subscription: getActivePlan(req.user.id),
     wallet: getWallet(req.user.id),
   });
