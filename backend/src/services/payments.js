@@ -198,10 +198,21 @@ async function ensureRecurringPrice(plan) {
     recurring: { interval: 'month', interval_count: 1 },
     metadata: { plan_id: String(plan.id) },
   });
-  db.prepare(`
-    INSERT INTO stripe_prices (plan_id, billing_interval, currency, amount_sek, stripe_price_id, created_at, updated_at)
-    VALUES (?, 'month', 'SEK', ?, ?, ?, ?)
-  `).run(plan.id, amount, price.id, now(), now());
+  // Two checkout requests hitting a never-bought price point at the same time
+  // could both create the Stripe price; the UNIQUE index makes one of the two
+  // local INSERTs fail. Treat that as "someone else won the race" and reuse it.
+  try {
+    db.prepare(`
+      INSERT INTO stripe_prices (plan_id, billing_interval, currency, amount_sek, stripe_price_id, created_at, updated_at)
+      VALUES (?, 'month', 'SEK', ?, ?, ?, ?)
+    `).run(plan.id, amount, price.id, now(), now());
+  } catch {
+    const existing = db.prepare(`
+      SELECT stripe_price_id FROM stripe_prices
+      WHERE plan_id = ? AND billing_interval = 'month' AND currency = 'SEK' AND amount_sek = ?
+    `).get(plan.id, amount);
+    if (existing) return existing.stripe_price_id;
+  }
   return price.id;
 }
 
@@ -278,6 +289,15 @@ function grantPlanCreditsOnce(paymentRow) {
   db.prepare('UPDATE payments SET renewal_granted = 1 WHERE id = ?').run(paymentRow.id);
 }
 
+// Count an offer redemption once per successful subscription activation. Called
+// ONLY from the code paths that flip a pending checkout payment to 'paid' the
+// first time, so retries and the checkout poll never double-count it. (The
+// legacy one-time fulfillPayment path already increments times_redeemed itself.)
+function redeemOfferOnce(offerId) {
+  if (!offerId) return;
+  db.prepare('UPDATE offers SET times_redeemed = times_redeemed + 1, updated_at = ? WHERE id = ?').run(now(), offerId);
+}
+
 function rewardReferralOnce(paymentRow) {
   if (!paymentRow || !paymentRow.referral_id || paymentRow.referral_rewarded) return;
   rewardSubscriptionReferral(paymentRow.referral_id);
@@ -336,6 +356,7 @@ export async function syncStripeSubscription({ stripeSubscriptionId, session = n
           method = 'stripe', subscription_id = ?, provider_ref = ?, provider_charge_ref = ?, checkout_session_id = ?, updated_at = ?
         WHERE id = ?
       `).run(now(), amount, amount, row.id, stripeSubscriptionId, session.payment_intent || null, session.id, now(), payment.id);
+      redeemOfferOnce(payment.offer_id);
       // First month: grant the plan credits right away so activation works even
       // if the invoice.paid webhook is delayed or not yet configured. The same
       // payment row is what the webhook would use, so this cannot double-grant.
@@ -409,6 +430,7 @@ export async function processPaidInvoice(invoice) {
             checkout_session_id = COALESCE(checkout_session_id, ?), updated_at = ?
           WHERE id = ?
         `).run(now(), amount, amount, row.id, invoice.id, invoice.payment_intent || null, pending.checkout_session_id, now(), pending.id);
+        redeemOfferOnce(pending.offer_id);
       } else {
         db.prepare(`UPDATE payments SET provider_charge_ref = COALESCE(provider_charge_ref, ?), updated_at = ? WHERE id = ?`)
           .run(invoice.payment_intent || null, now(), pending.id);

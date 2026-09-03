@@ -12,7 +12,7 @@ import { db, now } from '../db.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { ok, fail, parseId, sha256 } from '../utils/helpers.js';
 import { grantCredits, deductCredits, getWallet, getActivePlan, ensureFreePlan } from '../services/credits.js';
-import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan, revokeTopupCredits } from '../services/payments.js';
+import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan, revokeTopupCredits, cancelStripeSubscriptionNow } from '../services/payments.js';
 import { adminReferralSummary } from '../services/referrals.js';
 
 const router = Router();
@@ -802,6 +802,13 @@ router.post('/refunds/:id/process', async (req, res) => {
         .run(now(), now(), sub.id);
       ensureFreePlan(payment.user_id);
     }
+    // A refunded subscription payment must never bill again: cancel the
+    // underlying Stripe subscription so the next month is not charged after a
+    // refund the customer already received. Best-effort - do not fail the whole
+    // refund if Stripe is momentarily unreachable.
+    if (sub && sub.stripe_subscription_id) {
+      try { await cancelStripeSubscriptionNow(sub.stripe_subscription_id); } catch (e) { console.error('[admin.refund.cancelSub]', e.message); }
+    }
     if (payment.kind === 'credits_topup') {
       revokeTopupCredits(payment.id);
     }
@@ -842,6 +849,11 @@ router.post('/payments/:id/refund', async (req, res) => {
       db.prepare(`UPDATE subscriptions SET status = 'refunded', cancelled_at = ?, updated_at = ? WHERE id = ?`)
         .run(now(), now(), sub.id);
       ensureFreePlan(payment.user_id);
+    }
+    // Same protection as the refund-request flow: never bill a subscription
+    // whose payment was just refunded by an admin.
+    if (sub && sub.stripe_subscription_id) {
+      try { await cancelStripeSubscriptionNow(sub.stripe_subscription_id); } catch (e) { console.error('[admin.paymentRefund.cancelSub]', e.message); }
     }
     if (payment.kind === 'credits_topup') {
       revokeTopupCredits(payment.id);

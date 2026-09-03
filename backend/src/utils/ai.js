@@ -75,7 +75,7 @@ export async function aiComplete({ feature, system, user, user_id = null }) {
     success = true;
   } catch (e) {
     if (e instanceof InsufficientCreditsError) throw e;
-    if (user_id) {
+    if (user_id && content.length === 0) {
       try { refundCredits(user_id, feature); } catch { /* refund must not mask the error */ }
     }
     if (e instanceof AIServiceError) throw e;
@@ -165,7 +165,7 @@ export async function* aiStream({ system, user, user_id = null, maxTokens = 1400
     success = true;
   } catch (e) {
     if (e instanceof InsufficientCreditsError) throw e;
-    if (user_id) {
+    if (user_id && content.length === 0) {
       try { refundCredits(user_id, feature); } catch { /* refund must not mask the error */ }
     }
     if (e instanceof AIServiceError) throw e;
