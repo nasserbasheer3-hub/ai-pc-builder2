@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useSeo } from '../hooks/useSeo.js';
+import { track, sitePathWithUtm } from '../utils/analytics.js';
 
 export default function Blog() {
   const { t } = useI18n();
@@ -49,6 +50,18 @@ export default function Blog() {
         <div className="kicker">{t('blog.kicker')}</div>
         <h1>{t('blog.title')}</h1>
         <p style={{ color: 'var(--text-dim)', maxWidth: 640 }}>{t('blog.sub')}</p>
+      </div>
+
+      <div className="card" style={{ margin: '6px 0 22px', padding: '16px 18px', borderColor: 'rgba(34,211,238,0.35)', background: 'linear-gradient(90deg, rgba(124,92,255,0.10), rgba(34,211,238,0.06))', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <strong style={{ fontSize: '0.95rem' }}>{t('blog.ctaTitle')}</strong>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: 3 }}>{t('blog.ctaSub')}</div>
+        </div>
+        <Link
+          to={sitePathWithUtm('/pc', { medium: 'listing', content: 'top-cta' })}
+          className="btn btn-primary"
+          onClick={() => track('cta_click', { cta: 'blog_tools', item_name: 'pc_hub' })}
+        >{t('blog.ctaGo')}</Link>
       </div>
 
       <div className="pill-row" style={{ margin: '16px 0 22px', gap: 8 }}>

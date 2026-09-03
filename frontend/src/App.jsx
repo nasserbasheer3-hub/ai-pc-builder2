@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { LoadingBlock } from './components/ui.jsx';
 import { Sidebar, Topbar } from './components/Layout.jsx';
 import { useI18n } from './i18n/index.jsx';
 import { api } from './api/client.js';
+import { captureUtm } from './utils/analytics.js';
 
 const Landing = lazy(() => import('./pages/Landing.jsx'));
 const Login = lazy(() => import('./pages/Login.jsx'));
@@ -96,7 +97,8 @@ function ShellWithStreak() {
 export default function App() {
   return (
     <Suspense fallback={<PageLoading />}>
-      <Routes>
+      <UtmCapture>
+        <Routes>
         <Route element={<PublicLayout />}>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
@@ -153,7 +155,14 @@ export default function App() {
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </UtmCapture>
     </Suspense>
   );
+}
+
+function UtmCapture({ children }) {
+  const location = useLocation();
+  useEffect(() => { captureUtm(); }, [location.pathname, location.search]);
+  return children;
 }

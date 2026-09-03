@@ -26,6 +26,20 @@ export function getUtm() {
   try { return JSON.parse(localStorage.getItem(UTM_KEY) || '{}'); } catch { return {}; }
 }
 
+// Build a same-site path decorated with blog campaign parameters so visitors
+// who click from the blog into product pages stay attributable. Existing UTM
+// values on the target are never overwritten.
+export function sitePathWithUtm(path, { medium = 'article', campaign, content } = {}) {
+  try {
+    const url = new URL(String(path), window.location.origin);
+    if (!url.searchParams.get('utm_source')) url.searchParams.set('utm_source', 'blog');
+    if (!url.searchParams.get('utm_medium')) url.searchParams.set('utm_medium', medium);
+    if (campaign && !url.searchParams.get('utm_campaign')) url.searchParams.set('utm_campaign', campaign);
+    if (content && !url.searchParams.get('utm_content')) url.searchParams.set('utm_content', content);
+    return url.pathname + url.search + (url.hash || '');
+  } catch { return String(path); }
+}
+
 // Read campaign parameters from the landing URL once and remember them for the
 // whole visit. Pure reading of the URL - no cookies, no sending until consent.
 export function captureUtm() {

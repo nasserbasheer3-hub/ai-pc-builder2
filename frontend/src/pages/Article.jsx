@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useSeo } from '../hooks/useSeo.js';
 import { renderArticle } from '../utils/markdown.jsx';
+import { track, sitePathWithUtm } from '../utils/analytics.js';
 
 export default function ArticlePage() {
   const { slug } = useParams();
@@ -78,7 +79,24 @@ export default function ArticlePage() {
           <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.6 }}>{article.excerpt}</p>
         </div>
       )}
-      <article style={{ fontSize: '0.98rem' }}>{renderArticle(article.content)}</article>
+      <article style={{ fontSize: '0.98rem' }}>{renderArticle(article.content, article.slug)}</article>
+
+      <div className="card" style={{ marginTop: 36, padding: 24, borderColor: 'rgba(124,92,255,0.45)', background: 'rgba(124,92,255,0.08)', textAlign: 'center' }}>
+        <h2 style={{ margin: '0 0 6px', fontSize: '1.15rem' }}>{t('article.ctaTitle')}</h2>
+        <p style={{ margin: '0 auto 16px', color: 'var(--text-dim)', maxWidth: 580, fontSize: '0.9rem' }}>{t('article.ctaBody')}</p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link
+            to={sitePathWithUtm('/try', { campaign: article.slug, content: 'cta-try' })}
+            className="btn btn-primary"
+            onClick={() => track('cta_click', { cta: 'blog_try', campaign: article.slug, item_name: article.slug })}
+          >{t('article.ctaTry')}</Link>
+          <Link
+            to={sitePathWithUtm('/pricing', { campaign: article.slug, content: 'cta-pricing' })}
+            className="btn btn-ghost"
+            onClick={() => track('cta_click', { cta: 'blog_pricing', campaign: article.slug, item_name: article.slug })}
+          >{t('article.ctaPricing')}</Link>
+        </div>
+      </div>
 
       {related.length > 0 && (
         <>
