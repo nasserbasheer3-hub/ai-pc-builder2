@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { ok, fail, parseId } from '../utils/helpers.js';
 import { ensureFreePlan, getActivePlan, getWallet, listLedger, creditCosts } from '../services/credits.js';
 import {
-  listActivePlans, findOffer, applyOffer, parseFeatures, getSetting, bestAutoOffer,
+  listActivePlans, findOffer, applyOffer, parseFeatures, getSetting, bestAutoOffer, isNewPaidCustomer,
   createCheckout, fulfillPayment, isStripeConfigured, getStripe, stripeKeys,
   demoPaymentsEnabled, supportedPaymentMethods,
   syncStripeSubscription, cancelStripeSubscriptionNow, reactivateStripeSubscription,
@@ -188,8 +188,13 @@ router.post('/subscribe', requireAuth, async (req, res) => {
   }
 
   const coded = req.body?.offerCode || req.body?.offerId;
-  const offer = coded ? findOffer(coded, plan.id) : bestAutoOffer(plan);
-  if (coded && !offer) return fail(res, 400, 'OFFER_INVALID', 'This offer code is not valid for the selected plan.');
+  let offer = null;
+  if (coded) {
+    offer = findOffer(coded, plan.id);
+    if (!offer) return fail(res, 400, 'OFFER_INVALID', 'This offer code is not valid for the selected plan.');
+  } else if (isNewPaidCustomer(req.user.id)) {
+    offer = bestAutoOffer(plan);
+  }
   const referral = referralDiscountFor(req.user.id);
   try {
     const result = await createCheckout({

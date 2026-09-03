@@ -1359,6 +1359,8 @@ export default {
   "pricing.credits": "النقاط",
   "pricing.creditsPerMonth": "{n} نقطة ذكاء اصطناعي / شهر",
   "pricing.month": "شهر",
+  "pricing.firstMonthOffer": "خصم 50% على أول شهر",
+  "pricing.firstMonthNote": "خصم تلقائي للمشتركين الجدد - بدون كود.",
   "pricing.popular": "الأكثر طلباً",
   "pricing.tagline": "الوصف القصير",
   "pricing.priceSek": "السعر (كرونة)",

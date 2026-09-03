@@ -1359,6 +1359,8 @@ export default {
   "pricing.credits": "Krediter",
   "pricing.creditsPerMonth": "{n} AI-krediter / månad",
   "pricing.month": "månad",
+  "pricing.firstMonthOffer": "50% rabatt på din första månad",
+  "pricing.firstMonthNote": "Automatisk rabatt för nya prenumeranter - ingen kod krävs.",
   "pricing.popular": "Populärast",
   "pricing.tagline": "Kort text",
   "pricing.priceSek": "Pris (SEK)",

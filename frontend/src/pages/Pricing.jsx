@@ -203,6 +203,13 @@ export default function Pricing() {
 
   const currentSlug = me?.subscription?.slug;
   const paidPayments = (me?.payments || []).filter((p) => p.status === 'paid');
+  // The automatic first-month launch offer is a new-customer perk. Once anyone
+  // has a paid subscription or a paid plan payment in their history, show them
+  // the honest full price instead of a discount the backend will not apply.
+  const isExistingCustomer = Boolean(user && me) && (
+    (me.subscription && !me.subscription.is_free) ||
+    paidPayments.some((p) => String(p.kind || 'plan') !== 'credits_topup')
+  );
   const serverMethods = (data.paymentMethods && data.paymentMethods.length ? data.paymentMethods : ['card']);
   const availableMethods = METHODS.filter((m) => serverMethods.includes(m.id));
   const chosenMethod = availableMethods.some((m) => m.id === method) ? method : (availableMethods[0]?.id || 'card');
@@ -278,19 +285,24 @@ export default function Pricing() {
       <div className="pricing-grid">
         {(data.plans || []).map((p) => {
           const current = currentSlug === p.slug;
-          const discounted = p.offer && p.original_price_sek != null && p.price_sek < p.original_price_sek;
+          const autoOffer = p.offer && !p.offer.code ? p.offer : null;
+          const showAuto = Boolean(autoOffer) && !isExistingCustomer;
+          const showWas = showAuto && p.original_price_sek != null && p.price_sek < p.original_price_sek;
+          const shownPrice = showAuto ? p.price_sek : (p.original_price_sek ?? p.price_sek);
+          const shownWas = showWas ? p.original_price_sek : null;
           return (
             <Card key={p.id} className={`pricing-card${p.is_featured ? ' featured' : ''}${current ? ' current' : ''}`}>
               {p.is_featured ? <Badge>{t('pricing.popular')}</Badge> : null}
-              {p.offer ? <Badge tone="ok">{p.offer.name}</Badge> : null}
+              {showAuto ? <Badge tone="ok">{t('pricing.firstMonthOffer')}</Badge> : p.offer && p.offer.code ? <Badge tone="ok">{p.offer.name}</Badge> : null}
               <h2>{p.name}</h2>
               <p className="pricing-tagline">{p.tagline}</p>
               <div className="pricing-price">
-                {discounted ? <span className="pricing-was">{p.original_price_sek} kr</span> : null}
-                <b>{p.price_sek}</b>
+                {shownWas != null ? <span className="pricing-was">{shownWas} kr</span> : null}
+                <b>{shownPrice}</b>
                 <span> kr / {t('pricing.month')}</span>
               </div>
               <div className="pricing-credits">{t('pricing.creditsPerMonth', { n: p.monthly_credits })}</div>
+              {showAuto ? <p className="pricing-note">{t('pricing.firstMonthNote')}</p> : null}
               <ul className="pricing-features">
                 {(p.features || []).map((f) => <li key={f}>{f}</li>)}
               </ul>

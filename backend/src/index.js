@@ -35,10 +35,11 @@ import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
 import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog, suspendLegacyDemoAccounts } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
-import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled } from './services/payments.js';
+import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled, ensureLaunchOffers } from './services/payments.js';
 
 migrate();
 ensureBillingDefaults();
+ensureLaunchOffers();
 // Auto-seed a fresh/empty database on boot (production-safe: no demo users,
 // admin only created when an ADMIN_PASSWORD env is explicitly provided).
 try {

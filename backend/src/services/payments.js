@@ -117,6 +117,36 @@ export function bestAutoOffer(plan) {
   return best;
 }
 
+// Automatic "first month" offers are reserved for customers who have never paid
+// before. Once someone has any paid subscription or paid plan payment in their
+// history they pay the full price, which stops plan-hop / cancel-and-resubscribe
+// churn from farming a new-customer discount every month.
+export function isNewPaidCustomer(userId) {
+  if (!userId) return false;
+  const row = db.prepare(`
+    SELECT 1 x FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.user_id = ? AND p.is_free = 0
+    UNION
+    SELECT 1 x FROM payments WHERE user_id = ? AND status = 'paid' AND plan_id IS NOT NULL
+    LIMIT 1
+  `).get(userId, userId);
+  return !row;
+}
+
+// Boot-time creation of the launch auto-offer. It is deliberately idempotent
+// (matches on the exact name, code NULL) so redeploys never duplicate it and an
+// administrator can disable or edit it later from the offers admin panel.
+export function ensureLaunchOffers() {
+  const NAME = 'First month 50% off';
+  const existing = db.prepare('SELECT id, is_active FROM offers WHERE code IS NULL AND name = ?').get(NAME);
+  if (existing) return existing;
+  db.prepare(`
+    INSERT INTO offers (code, name, description, discount_type, discount_value, plan_id, is_active, max_redemptions, created_at, updated_at)
+    VALUES (NULL, ?, ?, 'percent', 50, NULL, 1, NULL, ?, ?)
+  `).run(NAME, '50% off your first month on every paid plan - automatic, no code needed. One-time for new subscribers.', now(), now());
+  console.log('[billing] launch offer created: automatic 50% first month');
+  return db.prepare('SELECT id, is_active FROM offers WHERE code IS NULL AND name = ?').get(NAME);
+}
+
 export function findOffer(codeOrId, planId) {
   if (codeOrId == null || codeOrId === '') return null;
   const asId = Number(codeOrId);
@@ -643,25 +673,34 @@ export function revokeTopupCredits(paymentId) {
 // ---------------------------------------------------------------------------
 
 export async function createCheckout({ user, plan, method, offer, origin, referral = null }) {
+  const original = Math.max(0, Math.trunc(Number(plan.price_sek) || 0));
   const priced = applyOffer(plan, offer);
+  // A discount comes from EITHER the (auto/coded) offer OR the referral code -
+  // never both stacked. Otherwise two 50% discounts would combine into a free
+  // first month. The better single discount wins; the referral is still
+  // recorded so the referrer earns their reward and the discount is spent once.
   let firstAmount = priced.amount;
   let referralPercent = 0;
-  if (referral && referral.percent > 0) {
-    referralPercent = referral.percent;
-    firstAmount = Math.round(firstAmount * (100 - referral.percent) / 100);
+  let useOffer = Boolean(offer) && firstAmount < original;
+  if (referral && referral.percent > 0 && referral.percent < 100) {
+    const referralAmount = Math.round(original * (100 - referral.percent) / 100);
+    if (referralAmount < firstAmount) {
+      firstAmount = referralAmount;
+      referralPercent = referral.percent;
+      useOffer = false;
+    }
   }
 
   const useTrial = firstAmount <= 0; // 100% first-month discount => 30d free trial
   const couponDescs = [];
   if (!useTrial) {
-    if (offer && firstAmount < priced.original) {
+    if (useOffer) {
       if (offer.discount_type === 'fixed') {
-        if (Number(offer.discount_value) < priced.original) couponDescs.push({ kind: 'fixed', value: offer.discount_value });
+        if (Number(offer.discount_value) < original) couponDescs.push({ kind: 'fixed', value: offer.discount_value });
       } else if (Number(offer.discount_value) < 100) {
         couponDescs.push({ kind: 'percent', value: offer.discount_value });
       }
-    }
-    if (referralPercent > 0 && referralPercent < 100) {
+    } else if (referralPercent > 0) {
       couponDescs.push({ kind: 'referral', value: referralPercent });
     }
   }
@@ -678,7 +717,7 @@ export async function createCheckout({ user, plan, method, offer, origin, referr
   const pay = db.prepare(`
     INSERT INTO payments (user_id, plan_id, amount_sek, original_amount_sek, currency, method, status, offer_id, referral_id, referral_discount, created_at)
     VALUES (?, ?, ?, ?, 'SEK', ?, 'pending', ?, ?, ?, ?)
-  `).run(user.id, plan.id, firstAmount, priced.original, method, offer?.id || null, referral?.referralId || null, referralPercent, now());
+  `).run(user.id, plan.id, firstAmount, original, method, offer?.id || null, referral?.referralId || null, referralPercent, now());
   const paymentId = Number(pay.lastInsertRowid);
 
   const stripe = getStripe();
