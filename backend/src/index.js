@@ -31,6 +31,7 @@ import steamRoutes from './routes/steam.js';
 import publicRoutes from './routes/public.js';
 import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
+import seoPages from './seo/seo-pages.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
 import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog, suspendLegacyDemoAccounts } from './seed.js';
@@ -143,6 +144,9 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '30d' }));
 
 app.use(seoRoutes);
+// Server-rendered SEO content hub (/compare/*, /fps/*). Must stay ahead of the
+// SPA static fallback below so crawlers receive real HTML instead of index.html.
+app.use(seoPages);
 app.use('/api/articles', articleRoutes);
 
 app.use('/api/auth', authRoutes);

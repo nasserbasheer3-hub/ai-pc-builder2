@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { seoSitemapEntries } from '../seo/seo-pages.js';
 
 const router = Router();
 
@@ -51,9 +52,11 @@ router.get('/sitemap.xml', (req, res) => {
     { loc: '/terms', pri: '0.2' },
   ];
   const articles = publishedArticles();
+  const seoPages = seoSitemapEntries();
   const urls = [
     ...staticUrls.map((u) => `<url><loc>${base}${u.loc}</loc><changefreq>weekly</changefreq><priority>${u.pri}</priority></url>`),
     ...articles.map((a) => `<url><loc>${base}/blog/${escapeXml(a.slug)}</loc><lastmod>${escapeXml(String(a.published_at).slice(0, 10))}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>`),
+    ...seoPages.map((u) => `<url><loc>${base}${escapeXml(u.loc)}</loc><changefreq>${escapeXml(u.changefreq || 'weekly')}</changefreq><priority>${u.pri}</priority></url>`),
   ].join('');
   res.type('application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
