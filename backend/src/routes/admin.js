@@ -14,8 +14,18 @@ import { ok, fail, parseId, sha256 } from '../utils/helpers.js';
 import { grantCredits, deductCredits, getWallet, getActivePlan, ensureFreePlan } from '../services/credits.js';
 import { isStripeConfigured, isWebhookConfigured, refundStripePayment, netRevenueSek, stripeKeys, maskSecret, resetStripeClient, sanitizeKey, listActivePlans, activatePaidPlan, revokeTopupCredits, cancelStripeSubscriptionNow } from '../services/payments.js';
 import { adminReferralSummary } from '../services/referrals.js';
+import { pingIndexNow } from '../utils/indexnow.js';
 
 const router = Router();
+
+// Host for IndexNow pings; refuses localhost/IP hosts so dev runs never ping.
+function reqHost(req) {
+  try {
+    const host = String(req.get('host') || '').replace(/:\d+$/, '').toLowerCase();
+    if (!host || host.startsWith('localhost') || host === '127.0.0.1' || /^[\d.:]+$/.test(host)) return null;
+    return host;
+  } catch { return null; }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
@@ -1185,6 +1195,7 @@ router.post('/articles',
       status === 'published' ? nowStr : null, nowStr, nowStr,
     ).lastInsertRowid;
     audit(req.admin, 'article.create', 'article', id, { slug, title });
+    if (status === 'published') void pingIndexNow({ host: reqHost(req), urls: [`/blog/${slug}`] });
     ok(res, { article: db.prepare(`SELECT ${articleCols} FROM articles WHERE id=?`).get(id) });
   });
 
@@ -1208,6 +1219,7 @@ router.patch('/articles/:id', param('id').isInt(), validate, (req, res) => {
     status, publishedAt, nowStr, a.id,
   );
   audit(req.admin, 'article.update', 'article', a.id, { slug: a.slug, title });
+  if (status === 'published') void pingIndexNow({ host: reqHost(req), urls: [`/blog/${a.slug}`] });
   ok(res, { article: db.prepare(`SELECT ${articleCols} FROM articles WHERE id=?`).get(a.id) });
 });
 

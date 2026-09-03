@@ -32,6 +32,7 @@ import publicRoutes from './routes/public.js';
 import articleRoutes from './routes/articles.js';
 import seoRoutes from './routes/seo.js';
 import seoPages from './seo/seo-pages.js';
+import blogSsr from './seo/blog-ssr.js';
 import billingRoutes from './routes/billing.js';
 import communityRoutes from './routes/community.js';
 import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog, suspendLegacyDemoAccounts } from './seed.js';
@@ -147,6 +148,8 @@ app.use(seoRoutes);
 // Server-rendered SEO content hub (/compare/*, /fps/*). Must stay ahead of the
 // SPA static fallback below so crawlers receive real HTML instead of index.html.
 app.use(seoPages);
+// Light SSR for the blog listing and article pages (real HTML + Article JSON-LD).
+app.use(blogSsr);
 app.use('/api/articles', articleRoutes);
 
 app.use('/api/auth', authRoutes);

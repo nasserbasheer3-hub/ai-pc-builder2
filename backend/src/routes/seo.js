@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db.js';
 import { seoSitemapEntries } from '../seo/seo-pages.js';
+import { INDEXNOW_KEY } from '../utils/indexnow.js';
 
 const router = Router();
 
@@ -24,6 +25,11 @@ router.get('/robots.txt', (req, res) => {
   const base = originOf(req);
   res.type('text/plain');
   res.send(`User-agent: *\nAllow: /\n\nSitemap: ${base}/sitemap.xml\n`);
+});
+
+// IndexNow verification key file (plain text at the domain root).
+router.get(`/${INDEXNOW_KEY}.txt`, (req, res) => {
+  res.type('text/plain').send(INDEXNOW_KEY);
 });
 
 // GET /sitemap.xml
