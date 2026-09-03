@@ -2,8 +2,17 @@ const CONSENT_KEY = 'gpp_cookie_consent';
 const UTM_KEY = 'gpp_utm';
 const UID_KEY = 'gpp_uid';
 const GA_ID = 'G-FVYC4ER34V';
+const TIKTOK_PIXEL_ID = 'DACR06JC77UBCVGL294G';
 
 const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'gclsrc', 'gbraid', 'wbraid', 'fbclid', 'ttclid'];
+
+// Internal events that map to TikTok standard conversion events.
+const TIKTOK_EVENTS = {
+  begin_checkout: 'InitiateCheckout',
+  sign_up: 'CompleteRegistration',
+};
+
+let tiktokReady = false;
 
 export function consentState() {
   try { return localStorage.getItem(CONSENT_KEY) || 'unknown'; } catch { return 'unknown'; }
@@ -49,6 +58,71 @@ function pushLayer(obj) {
   window.dataLayer.push(obj);
 }
 
+function ttq() {
+  try { return typeof window !== 'undefined' ? window.ttq : undefined; } catch { return undefined; }
+}
+
+// Load the official TikTok base code and fire the initial page view. Called
+// only after the visitor accepted (applyPixelConsent) so nothing is loaded,
+// stored or sent before explicit consent.
+function loadTikTok() {
+  if (tiktokReady || typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (!analyticsAllowed()) return;
+  try {
+    const w = window;
+    const d = document;
+    w.TiktokAnalyticsObject = 'ttq';
+    const queue = (w.ttq = w.ttq || []);
+    const methods = ['page', 'track', 'identify', 'instances', 'debug', 'on', 'off', 'once', 'ready', 'alias', 'group', 'enableCookie', 'disableCookie'];
+    queue.setAndDefer = (obj, method) => {
+      obj[method] = function () {
+        obj.push([method].concat(Array.prototype.slice.call(arguments, 0)));
+      };
+    };
+    for (const m of methods) queue.setAndDefer(queue, m);
+    queue.load = (id, opts) => {
+      const src = 'https://analytics.tiktok.com/i18n/pixel/events.js';
+      queue._i = queue._i || {};
+      queue._i[id] = [];
+      queue._i[id]._u = src;
+      queue._t = queue._t || {};
+      queue._t[id] = +new Date();
+      queue._o = queue._o || {};
+      queue._o[id] = opts || {};
+      const s = d.createElement('script');
+      s.type = 'text/javascript';
+      s.async = true;
+      s.src = src + '?sdkid=' + id + '&lib=ttq';
+      const first = d.getElementsByTagName('script')[0];
+      if (first && first.parentNode) first.parentNode.insertBefore(s, first);
+    };
+    queue.load(TIKTOK_PIXEL_ID);
+    queue.page();
+    tiktokReady = true;
+  } catch { /* never break the page */ }
+}
+
+function tiktokEvent(standard, params = {}) {
+  const api = ttq();
+  if (tiktokReady && api && typeof api.track === 'function') {
+    try { api.track(standard, params); } catch { /* never break the page */ }
+  }
+}
+
+// Apply the visitor's stored consent to third-party pixels: accepted loads the
+// TikTok pixel, declined disables it if it was somehow already active.
+export function applyPixelConsent() {
+  if (analyticsAllowed()) {
+    loadTikTok();
+  } else {
+    tiktokReady = false;
+    const api = ttq();
+    if (api && typeof api.disable === 'function') {
+      try { api.disableCookie(); api.disable(); } catch { /* ignore */ }
+    }
+  }
+}
+
 // Fire a GA4 event only when the visitor accepted analytics cookies.
 export function track(event, params = {}) {
   if (!analyticsAllowed()) return;
@@ -64,6 +138,17 @@ export function track(event, params = {}) {
   // Mirror to dataLayer so consent-gated pixels (Meta/Google Ads/TikTok) can
   // subscribe later without code changes.
   pushLayer({ event, ...payload });
+  // Standard TikTok conversion events, fired through the loaded pixel.
+  const tiktokStandard = TIKTOK_EVENTS[event];
+  if (tiktokStandard) {
+    const tparams = {};
+    const value = Number(params.value);
+    if (Number.isFinite(value) && value > 0) tparams.value = value;
+    if (params.currency) tparams.currency = params.currency;
+    if (params.plan || params.plan_name) tparams.content_name = params.plan || params.plan_name;
+    if (params.transaction_id) tparams.content_id = String(params.transaction_id);
+    tiktokEvent(tiktokStandard, tparams);
+  }
 }
 
 // Reflect the visitor's stored choice into gtag consent mode (kept in sync by
@@ -73,7 +158,7 @@ export function syncConsent() {
   const granted = analyticsAllowed();
   window.gtag('consent', 'update', {
     analytics_storage: granted ? 'granted' : 'denied',
-    ad_storage: 'denied',
+    ad_storage: granted ? 'granted' : 'denied',
   });
   if (granted) {
     try {
@@ -91,4 +176,12 @@ export function trackPurchase({ transaction_id, value, currency = 'SEK', plan })
     currency,
     ...(plan ? { item_name: plan } : {}),
   });
+  // TikTok CompletePayment with the same order data.
+  const tparams = {
+    transaction_id: String(transaction_id),
+    value: Number(value) || 0,
+    currency,
+  };
+  if (plan) tparams.content_name = plan;
+  tiktokEvent('CompletePayment', tparams);
 }
