@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import { api, ApiError } from '../api/client.js';
 import { Card, Badge, useToast, LoadingBlock } from '../components/ui.jsx';
-import { track } from '../utils/analytics.js';
+import { track, trackPurchase } from '../utils/analytics.js';
 
 const METHODS = [
   { id: 'card', labelKey: 'pricing.card' },
@@ -54,8 +54,15 @@ export default function Pricing() {
       try {
         if (paymentId) {
           const res = await api.get(`/billing/checkout/${paymentId}`);
-          if (res.payment?.status === 'paid') { toast.ok(t('pricing.paid')); track('checkout_completed', { status: 'paid' }); }
-          else if (checkout === 'cancel') toast.err(t('pricing.checkoutCancel'));
+          const pay = res.payment;
+          if (pay?.status === 'paid') {
+            toast.ok(t('pricing.paid'));
+            if (Number(pay.amount_sek) > 0) {
+              trackPurchase({ transaction_id: pay.id, value: pay.amount_sek, currency: 'SEK' });
+            } else {
+              track('checkout_completed', { status: 'paid' });
+            }
+          } else if (checkout === 'cancel') toast.err(t('pricing.checkoutCancel'));
           else { toast.ok(t('pricing.checkoutPending')); track('checkout_completed', { status: 'pending' }); }
         } else if (checkout === 'success') { toast.ok(t('pricing.paid')); track('checkout_completed', { status: 'paid' }); }
         else toast.err(t('pricing.checkoutCancel'));

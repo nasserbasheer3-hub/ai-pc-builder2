@@ -778,6 +778,11 @@ export function migrate() {
     if (!pcCols.includes('category')) db.exec("ALTER TABLE pc_builds ADD COLUMN category TEXT NOT NULL DEFAULT 'gaming'");
     if (!pcCols.includes('share_slug')) db.exec('ALTER TABLE pc_builds ADD COLUMN share_slug TEXT');
     if (!pcCols.includes('is_active')) db.exec('ALTER TABLE pc_builds ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0');
+    const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+    if (!userCols.includes('utm_source')) db.exec('ALTER TABLE users ADD COLUMN utm_source TEXT');
+    if (!userCols.includes('utm_medium')) db.exec('ALTER TABLE users ADD COLUMN utm_medium TEXT');
+    if (!userCols.includes('utm_campaign')) db.exec('ALTER TABLE users ADD COLUMN utm_campaign TEXT');
+    if (!userCols.includes('utm_term')) db.exec('ALTER TABLE users ADD COLUMN utm_term TEXT');
     const payCols2 = db.prepare('PRAGMA table_info(payments)').all().map((c) => c.name);
     if (!payCols2.includes('referral_id')) db.exec('ALTER TABLE payments ADD COLUMN referral_id INTEGER');
     if (!payCols2.includes('referral_discount')) db.exec('ALTER TABLE payments ADD COLUMN referral_discount INTEGER NOT NULL DEFAULT 0');

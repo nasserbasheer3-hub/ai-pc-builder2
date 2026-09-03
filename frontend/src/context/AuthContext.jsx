@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, getToken, setToken } from '../api/client';
+import { analyticsAllowed, getUtm, setUserId } from '../utils/analytics.js';
 
 const AuthCtx = createContext(null);
 
@@ -14,6 +15,7 @@ export function AuthProvider({ children }) {
       const data = await api.get('/auth/me');
       setUser(data.user);
       setProfile(data.profile);
+      setUserId(data.user?.id);
     } catch {
       setUser(null);
       setProfile(null);
@@ -28,15 +30,26 @@ export function AuthProvider({ children }) {
     const data = await api.post('/auth/login', { email, password });
     setToken(data.token);
     setUser(data.user);
+    setUserId(data.user?.id);
     const me = await api.get('/auth/me');
     setProfile(me.profile);
     return data;
   }, []);
 
   const register = useCallback(async (payload) => {
-    const data = await api.post('/auth/register', { ...payload, appUrl: window.location.origin });
+    const body = { ...payload, appUrl: window.location.origin };
+    // Only attach campaign attribution for visitors who accepted analytics,
+    // matching the consent promise shown in the cookie banner.
+    if (analyticsAllowed()) {
+      const utm = getUtm();
+      const utmBody = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term']
+        .reduce((acc, k) => { if (utm[k]) acc[k] = utm[k]; return acc; }, {});
+      if (Object.keys(utmBody).length) body.utm = utmBody;
+    }
+    const data = await api.post('/auth/register', body);
     setToken(data.token);
     setUser(data.user);
+    setUserId(data.user?.id);
     const me = await api.get('/auth/me');
     setProfile(me.profile);
     return data;
@@ -52,6 +65,7 @@ export function AuthProvider({ children }) {
     const me = await api.get('/auth/me');
     setUser(me.user);
     setProfile(me.profile);
+    setUserId(me.user?.id);
     return me;
   }, []);
 

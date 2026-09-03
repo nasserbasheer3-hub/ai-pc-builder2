@@ -89,7 +89,13 @@ router.post('/register',
     }
 
     const hash = bcrypt.hashSync(password, 10);
-    const uid = db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)').run(username, em, hash).lastInsertRowid;
+    const u = req.body.utm || {};
+    const utm = ['source', 'medium', 'campaign', 'term']
+      .reduce((acc, k) => { const v = String(u[k] || '').trim().slice(0, 120); if (v) acc[k] = v; return acc; }, {});
+    const uid = db.prepare(`
+      INSERT INTO users (username, email, password_hash, utm_source, utm_medium, utm_campaign, utm_term)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(username, em, hash, utm.source || null, utm.medium || null, utm.campaign || null, utm.term || null).lastInsertRowid;
     const referralCode = generateReferralCode(username);
     db.prepare('INSERT INTO profiles (user_id, referral_code) VALUES (?, ?)').run(uid, referralCode);
     registerDevice(uid, { deviceId, ip });
@@ -103,7 +109,7 @@ router.post('/register',
     const raw = randomToken();
     db.prepare("INSERT INTO auth_tokens (user_id, token_hash, purpose, expires_at) VALUES (?, ?, ?, datetime('now', '+24 hours'))").run(uid, sha256(raw), 'email_verify');
     const link = `${publicOrigin(req)}/verify-email?token=${raw}`;
-    const delivered = await sendMail(em, 'Verify your email', `Welcome to Gaming Performance Platform, ${username}! Click the link to verify your email: ${link}`, link);
+    const delivered = await sendMail(em, 'Verify your email', `Welcome to ApexCore, ${username}! Click the link to verify your email: ${link}`, link);
 
     const user = { id: uid, username, email: em, emailVerified: false, status: 'active' };
     return ok(res, {
