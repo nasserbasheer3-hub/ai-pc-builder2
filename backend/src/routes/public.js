@@ -102,18 +102,19 @@ router.post('/contact',
 // GET /api/public/build/:slug — a shareable build (link-shared, no auth).
 router.get('/build/:slug', (req, res) => {
   const row = db.prepare(`
-    SELECT b.id, b.name, b.category, b.resolution, b.target_fps, b.total_price, b.config_json,
-           b.expected_fps, b.created_at, u.username, p.display_name
+    SELECT b.id, b.name, b.category, b.resolution, b.target_fps, b.total_price, b.currency, b.budget,
+           b.config_json, b.expected_fps, b.created_at, u.username, p.display_name
     FROM pc_builds b JOIN users u ON u.id = b.user_id
     LEFT JOIN profiles p ON p.user_id = b.user_id
     WHERE b.share_slug = ?
   `).get(req.params.slug);
   if (!row) return fail(res, 404, 'NOT_FOUND', 'This shared build does not exist.');
   const config = JSON.parse(row.config_json || '{}');
-  const parts = partsDetail(config);
+  const parts = partsDetail(config, row.currency);
   ok(res, {
     build: {
       id: row.id, name: row.name || 'Shared build', category: row.category, resolution: row.resolution,
+      currency: row.currency, budget: row.budget,
       target_fps: row.target_fps, total_price: row.total_price || totalPrice(config),
       expected_fps: (() => { try { return JSON.parse(row.expected_fps || 'null'); } catch { return null; } })(),
       created_at: row.created_at, parts, partCount: Object.keys(parts).length,

@@ -26,6 +26,7 @@ export default function PcBuilder() {
   const [building, setBuilding] = useState(false);
   const [result, setResult] = useState(null);
   const [saved, setSaved] = useState([]);
+  const [shareUrl, setShareUrl] = useState(null);
 
   useEffect(() => {
     getGames().then(setGames).catch(() => {});
@@ -44,6 +45,7 @@ export default function PcBuilder() {
         purpose,
       });
       setResult(r);
+      setShareUrl(null);
       toast.ok(t('pcbuilder.buildGenerated'));
       api.get('/pc/builds').then((x) => setSaved(x.builds || [])).catch(() => {});
     } catch (e) {
@@ -57,6 +59,34 @@ export default function PcBuilder() {
       setSaved(saved.filter((b) => b.id !== id));
       toast.ok(t('pcbuilder.buildDeleted'));
     } catch (e) { toast.err(e.message); }
+  };
+
+  const ensureShare = async (buildId) => {
+    if (shareUrl) return shareUrl;
+    const r = await api.post(`/pc/builds/${buildId}/share`);
+    const url = `${window.location.origin}${r.url}`;
+    setShareUrl(url);
+    return url;
+  };
+
+  const doShare = async (channel) => {
+    if (!result?.buildId) return;
+    try {
+      const url = await ensureShare(result.buildId);
+      track('build_share_clicked', { channel, source: 'builder' });
+      if (channel === 'copy') {
+        await navigator.clipboard.writeText(url);
+        toast.ok(t('shared.linkCopied'));
+        return;
+      }
+      const text = encodeURIComponent(t('pcbuilder.shareText'));
+      const href = channel === 'whatsapp'
+        ? `https://wa.me/?text=${text}%20${encodeURIComponent(url)}`
+        : `https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(url)}`;
+      window.open(href, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      toast.err(e.message || t('shared.copyFailed'));
+    }
   };
 
   const toggleGame = (id) => {
@@ -190,6 +220,14 @@ export default function PcBuilder() {
                   )}
                   {result.ai?.error && <p style={{ fontSize: '0.8rem', color: 'var(--text-faint)', marginTop: 10 }}>{result.ai.error}</p>}
                   <p style={{ fontSize: '0.74rem', color: 'var(--text-faint)', marginTop: 12 }}>{result.note}</p>
+                  {result.buildId && (
+                    <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)', fontWeight: 600, marginRight: 4 }}>{t('shared.shareVia')}</span>
+                      <button className="btn btn-primary btn-sm" onClick={() => doShare('copy')}>{t('shared.copyLink')}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => doShare('whatsapp')}>WhatsApp</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => doShare('x')}>X</button>
+                    </div>
+                  )}
                 </Card>
               )}
             </>

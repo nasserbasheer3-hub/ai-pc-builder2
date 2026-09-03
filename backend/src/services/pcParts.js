@@ -31,14 +31,23 @@ function specLine(key, row) {
   }
 }
 
-export function partsDetail(config) {
+function localPrice(row, currency) {
+  if (currency === 'EUR' && row.price_eur != null) return row.price_eur;
+  if (currency === 'GBP' && row.price_gbp != null) return row.price_gbp;
+  return row.price_usd;
+}
+
+export function partsDetail(config, currency) {
   const parts = {};
   for (const key of Object.keys(PART_TABLES)) {
     const id = Number(config?.[key]);
     if (!id) continue;
     const row = resolvePart(key, id);
     if (!row) continue;
-    parts[key] = { id, name: row.name, price_usd: row.price_usd, spec: specLine(key, row) || null };
+    parts[key] = {
+      id, name: row.name, price_usd: row.price_usd, spec: specLine(key, row) || null,
+      price: currency ? Math.round(localPrice(row, currency)) : row.price_usd,
+    };
   }
   return parts;
 }
