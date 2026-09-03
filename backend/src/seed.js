@@ -362,10 +362,10 @@ function seedDemoUsers() {
 const STARTER_ARTICLES = [
   {
     slug: 'verified-hardware-catalog',
-    title: 'Why LevelCore Only Lists Verified Hardware Data',
+    title: 'Why ApexCore Only Lists Verified Hardware Data',
     excerpt: 'Every component in our catalog comes with a documented source. Here is how we keep hardware data honest.',
     cover_color: '#7c5cff',
-    tags: ['Hardware', 'Data', 'LevelCore'],
+    tags: ['Hardware', 'Data', 'ApexCore'],
     content: `# Why we publish only verified data
 
 A PC parts catalog is only as good as the numbers behind it. Wrong clock speeds, guessed power draws or invented price ranges quietly break every tool that depends on them - from the FPS calculator to the compatibility checks.
@@ -458,7 +458,7 @@ Match the GPU to your monitor first, because that is where visual quality comes 
 
 > Use the FPS calculator for the specific games you play - it will show you whether your CPU or your GPU is the limiting part for your own library.
 
-## The LevelCore builder can help
+## The ApexCore builder can help
 
 Set a budget and the games you care about, and the builder will find a balanced configuration instead of a lopsided one.`,
   },
@@ -487,23 +487,23 @@ Every computer has a bottleneck. One part finishes its work before another, so t
 
 A mild CPU limit in one or two games is rarely a reason to upgrade. A severe, constant CPU limit across the games you actually play is a different story.
 
-## The LevelCore bottleneck tool
+## The ApexCore bottleneck tool
 
 Open the bottleneck checker, choose your CPU and GPU, and it will compare their relative performance indexes and show where the balance sits - with the same honest caveats as the FPS calculator.`,
   },
   {
     slug: 'connect-your-steam-library',
-    title: 'How to Connect Your Steam Library to LevelCore',
+    title: 'How to Connect Your Steam Library to ApexCore',
     excerpt: 'Import your owned games and playtime so your FPS estimates and performance reports are built on the games you really play.',
     cover_color: '#a78bfa',
     tags: ['Steam', 'Import', 'Guide'],
     content: `# How to connect your Steam library
 
-LevelCore can read which games you own on Steam and how long you have played them. That makes performance tools far more useful, because they target the games you actually play.
+ApexCore can read which games you own on Steam and how long you have played them. That makes performance tools far more useful, because they target the games you actually play.
 
 ## Before you start
 
-Connecting works through the Steam Web API. The site owner enables the connection from the admin panel - when it is enabled you will see the Steam section on the LevelCore Steam page.
+Connecting works through the Steam Web API. The site owner enables the connection from the admin panel - when it is enabled you will see the Steam section on the ApexCore Steam page.
 
 ## How to find your Steam ID
 
@@ -513,26 +513,26 @@ Connecting works through the Steam Web API. The site owner enables the connectio
 
 ## Connect and sync
 
-1. Go to the Steam page inside LevelCore.
+1. Go to the Steam page inside ApexCore.
 2. Enter your Steam ID or custom URL.
 3. Click connect - Steam is not asked for your password; only the public profile data is read.
 4. Use sync to refresh your library later.
 
 ## What happens next
 
-The import reads your owned games and playtime. LevelCore then matches those games to entries in the verified game catalog so the FPS calculator and performance reports can use them.
+The import reads your owned games and playtime. ApexCore then matches those games to entries in the verified game catalog so the FPS calculator and performance reports can use them.
 
 > If a game is not yet in our verified catalog, it will not get a made-up estimate - it simply stays unmatched until real data exists.`,
   },
   {
     slug: 'understanding-plans-and-credits',
-    title: 'LevelCore Plans: How Subscriptions and Credits Work',
+    title: 'ApexCore Plans: How Subscriptions and Credits Work',
     excerpt: 'Everything you need to know about monthly plans, wallet credits and what happens to your subscription at the end of the month.',
     cover_color: '#10b981',
     tags: ['Pricing', 'Billing', 'Plans'],
-    content: `# LevelCore plans: subscriptions and credits explained
+    content: `# ApexCore plans: subscriptions and credits explained
 
-LevelCore offers a free account plus optional paid plans for heavier use. Subscriptions are managed with recurring monthly billing through Stripe.
+ApexCore offers a free account plus optional paid plans for heavier use. Subscriptions are managed with recurring monthly billing through Stripe.
 
 ## Free vs paid
 
@@ -546,7 +546,7 @@ AI features consume credits because each request calls a real external model. Wh
 ## Billing details
 
 - Subscriptions renew automatically every month and can be cancelled at any time from the pricing page.
-- Payment is handled by Stripe; LevelCore never stores your card number.
+- Payment is handled by Stripe; ApexCore never stores your card number.
 - Plan changes and refunds go through the billing dashboard.
 
 ## Need to change or cancel?
@@ -554,6 +554,30 @@ AI features consume credits because each request calls a real external model. Wh
 Use the plan management buttons on the pricing page. You keep access until the end of the billing period you have already paid for.`,
   },
 ];
+
+// Rebrand helper: updates existing database text when the brand name changes
+// (LevelCore -> ApexCore). Idempotent - a second run finds nothing to change.
+function migrateBrandName() {
+  const old = 'LevelCore', brand = 'ApexCore';
+  const q = (tbl, cols) => {
+    let changed = 0;
+    for (const col of cols) {
+      const r = db.prepare(`UPDATE ${tbl} SET ${col} = REPLACE(${col}, ?, ?) WHERE ${col} LIKE ?`)
+        .run(old, brand, `%${old}%`);
+      changed += r.changes;
+    }
+    return changed;
+  };
+  let changed = 0;
+  try {
+    changed += q('articles', ['title', 'excerpt', 'content', 'author_name']);
+    changed += q('admin_settings', ['value']);
+    changed += q('plans', ['name', 'tagline', 'features_json']);
+  } catch (e) {
+    console.warn('[seed] brand migration skipped:', e.message);
+  }
+  if (changed) console.log(`  brand renamed to ${brand} in ${changed} row(s)`);
+}
 
 const PUBLISH_DATES = [
   '2026-08-30T10:00:00Z', '2026-08-27T12:00:00Z', '2026-08-22T09:00:00Z',
@@ -569,7 +593,7 @@ function seedStarterArticles() {
   const ins = db.prepare(
     `INSERT OR IGNORE INTO articles
       (slug, title, excerpt, content, cover_color, tags, author_name, status, published_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'LevelCore', 'published', ?)`
+     VALUES (?, ?, ?, ?, ?, ?, 'ApexCore', 'published', ?)`
   );
   let n = 0;
   for (let i = 0; i < STARTER_ARTICLES.length; i++) {
@@ -592,6 +616,7 @@ export function seed({ demo = true, admin = true } = {}) {
     seedAdminSettings();
     ensureBillingDefaults();
     seedStarterArticles();
+    migrateBrandName();
     if (demo) seedDemoUsers();
   })();
   console.log(`Seed complete. (demo=${demo}, admin=${admin})`);
@@ -621,6 +646,7 @@ export function syncCatalog() {
     seedHardware();
     seedRules();
     seedStarterArticles();
+    migrateBrandName();
   })();
   console.log('[seed] catalog sync complete');
 }

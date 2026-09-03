@@ -11,7 +11,7 @@ export default function Contact() {
   const [busy, setBusy] = useState(false);
 
   useSeo({
-    title: `${t('contact.title')} — LevelCore`,
+    title: `${t('contact.title')} — ApexCore`,
     description: t('contact.sub'),
   });
 

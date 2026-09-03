@@ -22,7 +22,7 @@ export default function LegalPage({ page }) {
   const { t } = useI18n();
   const count = SECTION_COUNTS[page] || 1;
   useSeo({
-    title: `${t(`${page}.title`)} — LevelCore`,
+    title: `${t(`${page}.title`)} — ApexCore`,
     description: t(`${page}.sub`),
   });
 

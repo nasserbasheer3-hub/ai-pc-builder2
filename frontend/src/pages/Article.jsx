@@ -24,7 +24,7 @@ export default function ArticlePage() {
   }, [slug]);
 
   useSeo({
-    title: article ? `${article.title} — LevelCore` : t('blog.title'),
+    title: article ? `${article.title} — ApexCore` : t('blog.title'),
     description: article?.excerpt || article?.title || t('blog.sub'),
     image: article ? (String(article.content || '').match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] || undefined) : undefined,
     jsonLd: article ? [{
@@ -35,7 +35,7 @@ export default function ArticlePage() {
       datePublished: article.published_at,
       dateModified: article.updated_at,
       author: { '@type': 'Person', name: article.author_name },
-      publisher: { '@type': 'Organization', name: 'LevelCore' },
+      publisher: { '@type': 'Organization', name: 'ApexCore' },
       mainEntityOfPage: `${window.location.origin}/blog/${article.slug}`,
     }, {
       '@context': 'https://schema.org',

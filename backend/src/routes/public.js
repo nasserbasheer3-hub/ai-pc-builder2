@@ -91,7 +91,7 @@ router.post('/contact',
         'INSERT INTO contact_messages (name, email, message, ip) VALUES (?, ?, ?, ?)'
       ).run(name, email, message, req.ip || null);
 
-      sendMail(config.admin.email, `[LevelCore] Contact from ${name}`, `${name} (${email}):\n\n${message}`).catch(() => {});
+      sendMail(config.admin.email, `[ApexCore] Contact from ${name}`, `${name} (${email}):\n\n${message}`).catch(() => {});
       ok(res, { accepted: true, id: info.lastInsertRowid });
     } catch (err) {
       console.error('[contact] store failed:', err.message);

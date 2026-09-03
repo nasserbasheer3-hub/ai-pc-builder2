@@ -145,7 +145,7 @@ export default function Compare() {
 
   const compareTitle = chosen.length >= 2 ? `${chosen[0].name} vs ${chosen[1].name}` : t('compare.title');
   useSeo({
-    title: `${compareTitle} — LevelCore`,
+    title: `${compareTitle} — ApexCore`,
     description: t('compare.sub'),
   });
 

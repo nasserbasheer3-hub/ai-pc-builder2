@@ -85,7 +85,7 @@ export function Sidebar({ open, onClose }) {
   return (
     <aside className="sidebar" style={open ? { display: 'flex' } : undefined}>
       <div className="brand">
-        <img className="brand-logo" src="/logo/logo-lockup.webp" alt="LevelCore" />
+        <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" />
       </div>
       {NAV.map((n, i) => n.group
         ? <div key={i} className="nav-group">{t(n.group)}</div>

@@ -542,7 +542,7 @@ export function migrate() {
       content TEXT NOT NULL DEFAULT '',
       cover_color TEXT,
       tags TEXT NOT NULL DEFAULT '[]',               -- json array
-      author_name TEXT NOT NULL DEFAULT 'LevelCore',
+      author_name TEXT NOT NULL DEFAULT 'ApexCore',
       status TEXT NOT NULL DEFAULT 'draft',          -- draft | published
       published_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),

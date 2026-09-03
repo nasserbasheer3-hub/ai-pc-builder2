@@ -64,7 +64,7 @@ router.get('/rss.xml', (req, res) => {
     return `<item><title>${escapeXml(a.title)}</title><link>${link}</link><guid isPermaLink="true">${link}</guid><description>${desc}</description><author>${escapeXml(a.author_name)}</author><pubDate>${new Date(a.published_at).toUTCString()}</pubDate></item>`;
   }).join('');
   res.type('application/rss+xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>LevelCore Blog</title><link>${base}/blog</link><description>Gaming performance guides, PC building tips and verified hardware analysis.</description>${items}</channel></rss>`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>ApexCore Blog</title><link>${base}/blog</link><description>Gaming performance guides, PC building tips and verified hardware analysis.</description>${items}</channel></rss>`);
 });
 
 // GET /og-image.svg — branded Open Graph image (1200x630)
@@ -88,7 +88,7 @@ router.get('/og-image.svg', (req, res) => {
   <circle cx="140" cy="560" r="220" fill="#22d3ee" opacity="0.12"/>
   <rect x="90" y="235" width="76" height="76" rx="16" fill="url(#acc)"/>
   <text x="128" y="290" font-family="monospace" font-size="52" font-weight="bold" fill="#09090f" text-anchor="middle">&gt;_</text>
-  <text x="90" y="352" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">LevelCore</text>
+  <text x="90" y="352" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="bold" fill="#ffffff">ApexCore</text>
   <text x="90" y="404" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#a3a3c2">Track · Analyze · Improve your gaming performance</text>
   <rect x="90" y="452" width="300" height="6" rx="3" fill="url(#acc)"/>
 </svg>`);

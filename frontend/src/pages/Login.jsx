@@ -62,7 +62,7 @@ export function AuthShell({ children }) {
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: 32 }}>
         <Link to="/" style={{ textDecoration: 'none' }}>
           <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-            <img className="brand-logo" src="/logo/logo-lockup.webp" alt="LevelCore" style={{ width: 280, maxWidth: '100%' }} />
+            <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" style={{ width: 280, maxWidth: '100%' }} />
           </div>
         </Link>
         {children}

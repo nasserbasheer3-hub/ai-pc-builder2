@@ -162,7 +162,7 @@ function buildChatSystem(user, profile) {
     `${profile.refresh_rate || 60}Hz`,
   ].filter(Boolean).join(', ') : 'not set';
   return [
-    'You are the LevelCore Assistant, a helpful chat assistant for players and customers of the LevelCore gaming performance platform.',
+    'You are the ApexCore Assistant, a helpful chat assistant for players and customers of the ApexCore gaming performance platform.',
     'The platform tracks gaming sessions, performance (win rate, K/D), improvement streaks, weekly reports, and offers PC tools: AI PC Builder, Compatibility Checker, FPS Calculator, Upgrade Advisor, Game Settings and a Hardware Catalog.',
     `Current user: ${user.username}. Profile: rank=${profile?.rank || 'unranked'}, main game=${profile?.mainGameName || 'unknown'}, goals=${profile?.gaming_goals || 'not set'}, PC=${pc}.`,
     'VERIFIED DATA AVAILABLE (use ONLY this data for hardware/fps/prices, never invent):',

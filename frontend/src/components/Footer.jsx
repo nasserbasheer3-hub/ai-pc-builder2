@@ -7,7 +7,7 @@ export default function Footer() {
     <footer style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 60, padding: '34px 22px 44px' }}>
       <div style={{ maxWidth: 980, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 26 }}>
           <div>
-            <img className="brand-logo" src="/logo/logo-lockup.webp" alt="LevelCore" style={{ width: 190 }} />
+            <img className="brand-logo" src="/logo/logo-lockup.webp" alt="ApexCore" style={{ width: 190 }} />
             <p style={{ color: 'var(--text-dim)', fontSize: '0.82rem', marginTop: 10, maxWidth: 260 }}>{t('footer.tagline')}</p>
             <div style={{ marginTop: 12 }}><LanguageSwitcher compact /></div>
           </div>

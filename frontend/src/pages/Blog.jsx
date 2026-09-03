@@ -17,7 +17,7 @@ export default function Blog() {
     jsonLd: [{
       '@context': 'https://schema.org',
       '@type': 'Blog',
-      name: 'LevelCore Blog',
+      name: 'ApexCore Blog',
       description: t('blog.sub'),
     }].concat(articles && articles.length ? [{
       '@context': 'https://schema.org',
