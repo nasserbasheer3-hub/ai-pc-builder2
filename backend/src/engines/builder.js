@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { checkCompatibility } from './compatibility.js';
 import { estimateFps } from './fps.js';
 import { storeSearchLinks } from '../utils/partStore.js';
+import { applyAmazonLive } from '../services/amazonPrices.js';
 
 const FX = { USD: 1, EUR: 1.09, GBP: 1.27 };
 
@@ -126,7 +127,7 @@ export function buildPc(input) {
     { category: 'cooler', text: `${parts.cooler.name} (${parts.cooler.type}) — supports ${parts.cpu.socket}.${parts.cpu.tdp_watts >= 120 ? ' Selected as liquid/high-airflow option for a high-TDP CPU.' : ''}` },
   ];
 
-  return {
+  const built = {
     status: 'ready',
     config,
     parts: {
@@ -149,4 +150,15 @@ export function buildPc(input) {
     priceLabel: 'Estimated price',
     note: 'Component selection is made from the verified hardware catalog. Prices are approximate street estimates with a date.',
   };
+
+  const amazonCount = applyAmazonLive(built.parts, currency);
+  if (amazonCount > 0) {
+    const amazonTotal = Math.round(Object.values(built.parts).reduce((s, p) => s + (Number(p.price) || 0), 0));
+    built.totalPrice = amazonTotal;
+    built.withinBudget = amazonTotal <= budget;
+    built.priceLabel = 'Price basis: Amazon where live, reference otherwise';
+    built.note = `${amazonCount} of ${Object.keys(built.parts).length} part prices were fetched live from Amazon and are current as of the dates shown on each part. The remaining parts use catalog reference estimates with their own dates. Always confirm the final price in store before buying.`;
+  }
+
+  return built;
 }

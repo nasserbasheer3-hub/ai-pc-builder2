@@ -302,7 +302,7 @@ export default function PcMy() {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontWeight: 700 }}>{w.price_usd ? `$${w.price_usd}` : '—'}</span>
-                  <RefDate date={w.price_date} />
+                  <RefDate date={w.price_date} live={!!w.live} />
                 </div>
                 <StoreLinks store={w.store} name={w.name} />
                 <button className="btn btn-danger btn-sm" onClick={() => delWish(w.id)}>✕</button>

@@ -149,13 +149,16 @@ export function StoreLinks({ store, name, size = 'sm' }) {
   );
 }
 
-// Reference price date caption (prices are verified aggregate estimates).
-export function RefDate({ date }) {
+// Date caption under a price. Two honest states:
+//   live  -> the number was fetched from Amazon on this date
+//   other -> catalog reference estimate, last revised on this date
+export function RefDate({ date, live }) {
   const label = priceDateLabel(date);
   if (!label) return null;
+  const prefix = live ? 'live price' : 'reference price';
   return (
     <div style={{ fontSize: '0.62rem', color: 'var(--text-faint)', marginTop: 2 }}>
-      price ref. {label}
+      {prefix} · {label}
     </div>
   );
 }

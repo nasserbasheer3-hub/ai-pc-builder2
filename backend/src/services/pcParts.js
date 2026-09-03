@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import { storeSearchLinks } from '../utils/partStore.js';
+import { applyAmazonLive } from './amazonPrices.js';
 
 export const PART_TABLES = {
   cpu: 'cpus', gpu: 'gpus', motherboard: 'motherboards', ram: 'memory_modules',
@@ -52,6 +53,7 @@ export function partsDetail(config, currency) {
       store: storeSearchLinks(row.name, currency || 'USD'),
     };
   }
+  if (currency) applyAmazonLive(parts, currency);
   return parts;
 }
 

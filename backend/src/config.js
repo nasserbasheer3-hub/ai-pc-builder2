@@ -41,6 +41,13 @@ export const config = {
     apiKey: process.env.USER_STEAM_API_KEY || '',
     baseUrl: process.env.USER_STEAM_BASE_URL || 'https://api.steampowered.com',
   },
+  amazon: {
+    accessKey: process.env.AMAZON_ACCESS_KEY || '',
+    secretKey: process.env.AMAZON_SECRET_KEY || '',
+    partnerTag: process.env.AMAZON_PARTNER_TAG || '',
+    // Whole-listing availability window (hours) for cached PA-API prices.
+    ttlHours: Number(process.env.AMAZON_PRICE_TTL_HOURS || 72),
+  },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || '',
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',

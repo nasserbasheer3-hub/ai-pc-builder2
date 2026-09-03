@@ -165,7 +165,7 @@ export default function SharedBuild() {
                     {p.spec && <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>{p.spec}</div>}
                     <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--primary-2)', marginTop: 5 }}>
                       {price}
-                      <RefDate date={p.price_date} />
+                      <RefDate date={p.price_date} live={!!p.live} />
                     </div>
                     <StoreLinks store={p.store} name={p.name} />
                   </div>

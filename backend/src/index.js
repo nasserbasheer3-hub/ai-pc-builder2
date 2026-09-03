@@ -38,8 +38,10 @@ import communityRoutes from './routes/community.js';
 import { seedIfEmpty, ensureAdmin, issueAdminSetupToken, syncCatalog, suspendLegacyDemoAccounts } from './seed.js';
 import { InsufficientCreditsError, ensureBillingDefaults } from './services/credits.js';
 import { getStripe, handleStripeEvent, stripeKeys, isWebhookConfigured, isStripeConfigured, demoPaymentsEnabled, ensureLaunchOffers } from './services/payments.js';
+import { ensureAmazonPricesTable } from './services/amazonPrices.js';
 
 migrate();
+ensureAmazonPricesTable();
 ensureBillingDefaults();
 ensureLaunchOffers();
 // Auto-seed a fresh/empty database on boot (production-safe: no demo users,

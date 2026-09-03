@@ -19,7 +19,7 @@ function PriceCell({ i }) {
   return (
     <div style={{ textAlign: 'right' }}>
       <div>{p != null ? <Badge tone="primary">${p}</Badge> : <span style={{ color: 'var(--text-faint)' }}>—</span>}</div>
-      <RefDate date={i.price_date} />
+      <RefDate date={i.price_date} live={!!i.live} />
     </div>
   );
 }

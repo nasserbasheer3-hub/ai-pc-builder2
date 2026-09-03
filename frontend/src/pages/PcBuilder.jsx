@@ -199,7 +199,7 @@ export default function PcBuilder() {
                               <div><span style={{ fontSize: '0.72rem', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t(label)}</span><div style={{ fontWeight: 600 }}>{p.name}</div></div>
                               <div style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                                 <div style={{ fontWeight: 700, color: 'var(--primary-2)' }}>{p.price} {result.currency}</div>
-                                <RefDate date={p.price_date} />
+                                <RefDate date={p.price_date} live={!!p.live} />
                               </div>
                             </div>
                             <div style={{ fontSize: '0.76rem', color: 'var(--text-faint)', marginTop: 4 }}>{p.reason}</div>

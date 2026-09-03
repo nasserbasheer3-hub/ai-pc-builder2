@@ -153,9 +153,10 @@ router.get('/builds', (req, res) => {
     const config = JSON.parse(r.config_json || '{}');
     const parts = partsDetail(config, r.currency);
     const head = ['cpu', 'gpu'].map((k) => parts[k]?.name).filter(Boolean);
+    const partTotal = Math.round(Object.values(parts).reduce((s, p) => s + (Number(p.price) || 0), 0));
     return {
       slug: r.share_slug, name: r.name || 'Shared build', category: r.category,
-      currency: r.currency, total_price: r.total_price || totalPrice(config),
+      currency: r.currency, total_price: r.total_price || partTotal,
       resolution: r.resolution, target_fps: r.target_fps, created_at: r.created_at,
       partCount: Object.keys(parts).length, head,
       owner: { username: r.username, display_name: r.display_name || r.username },
@@ -176,11 +177,14 @@ router.get('/build/:slug', (req, res) => {
   if (!row) return fail(res, 404, 'NOT_FOUND', 'This shared build does not exist.');
   const config = JSON.parse(row.config_json || '{}');
   const parts = partsDetail(config, row.currency);
+  const partTotal = Math.round(Object.values(parts).reduce((s, p) => s + (Number(p.price) || 0), 0));
+  const liveCount = Object.values(parts).filter((p) => p.price_source === 'amazon').length;
   ok(res, {
     build: {
       id: row.id, name: row.name || 'Shared build', category: row.category, resolution: row.resolution,
       currency: row.currency, budget: row.budget,
-      target_fps: row.target_fps, total_price: row.total_price || totalPrice(config),
+      target_fps: row.target_fps, total_price: row.total_price || partTotal,
+      total_price_display: partTotal, live_parts: liveCount,
       expected_fps: (() => { try { return JSON.parse(row.expected_fps || 'null'); } catch { return null; } })(),
       created_at: row.created_at, parts, partCount: Object.keys(parts).length,
       owner: { username: row.username, display_name: row.display_name || row.username },

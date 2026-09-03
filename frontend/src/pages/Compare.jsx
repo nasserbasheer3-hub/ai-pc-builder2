@@ -193,7 +193,7 @@ export default function Compare() {
                 </select>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: 6, minHeight: 32 }}>
                   {sel ? (sel.brand ? `${sel.brand} · ` : '') + (sel.price_usd ? `$${sel.price_usd}` : t('compare.noPrice')) : ''}
-                  {sel && <RefDate date={sel.price_date} />}
+                  {sel && <RefDate date={sel.price_date} live={!!sel.live} />}
                 </div>
               </div>
             ))}
@@ -216,7 +216,7 @@ export default function Compare() {
                           <PartImage part={{ category: c.category }} size={24} />
                           <b style={{ fontSize: '0.84rem', lineHeight: 1.25 }}>{c.name}</b>
                         </div>
-                        <div style={{ marginTop: 3 }}><RefDate date={c.price_date} /></div>
+                        <div style={{ marginTop: 3 }}><RefDate date={c.price_date} live={!!c.live} /></div>
                         <StoreLinks store={c.store} name={c.name} />
                       </th>
                     ))}
