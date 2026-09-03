@@ -1810,4 +1810,6 @@ export default {
   "shared.shareLine": "شاهد هذا البناء على ApexCore: {parts}",
   "shared.shareVia": "شارك هذا البناء",
   "shared.signUp": "ابدأ مجاناً — بلا بطاقة",
+  "landing.sharesSub": "بنايات شاركها أعضاء ApexCore علناً — اضغط أي بطاقة لعرض المواصفات الكاملة وتقديرات الأداء.",
+  "landing.sharesTitle": "أحدث البنايات المُشاركة",
 }

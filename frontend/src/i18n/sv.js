@@ -1810,4 +1810,6 @@ export default {
   "shared.shareLine": "Kolla in detta PC-bygge på ApexCore: {parts}",
   "shared.shareVia": "Dela detta bygge",
   "shared.signUp": "Börja gratis — inget kort behövs",
+  "landing.sharesSub": "Byggen som ApexCore-medlemmar delat offentligt — öppna ett kort för full spec och uppskattad FPS.",
+  "landing.sharesTitle": "Nyligen delade byggen",
 }

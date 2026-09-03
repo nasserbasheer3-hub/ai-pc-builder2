@@ -99,6 +99,31 @@ router.post('/contact',
     }
   });
 
+// GET /api/public/builds — most recently shared public builds (social proof strip)
+router.get('/builds', (req, res) => {
+  const rows = db.prepare(`
+    SELECT b.share_slug, b.name, b.category, b.currency, b.total_price, b.resolution,
+           b.target_fps, b.config_json, b.created_at, u.username, p.display_name
+    FROM pc_builds b JOIN users u ON u.id = b.user_id
+    LEFT JOIN profiles p ON p.user_id = b.user_id
+    WHERE b.share_slug IS NOT NULL AND b.share_slug != ''
+    ORDER BY b.created_at DESC LIMIT 8
+  `).all();
+  const builds = rows.map((r) => {
+    const config = JSON.parse(r.config_json || '{}');
+    const parts = partsDetail(config, r.currency);
+    const head = ['cpu', 'gpu'].map((k) => parts[k]?.name).filter(Boolean);
+    return {
+      slug: r.share_slug, name: r.name || 'Shared build', category: r.category,
+      currency: r.currency, total_price: r.total_price || totalPrice(config),
+      resolution: r.resolution, target_fps: r.target_fps, created_at: r.created_at,
+      partCount: Object.keys(parts).length, head,
+      owner: { username: r.username, display_name: r.display_name || r.username },
+    };
+  });
+  ok(res, { builds });
+});
+
 // GET /api/public/build/:slug — a shareable build (link-shared, no auth).
 router.get('/build/:slug', (req, res) => {
   const row = db.prepare(`

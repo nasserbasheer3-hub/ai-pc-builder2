@@ -1810,4 +1810,6 @@ export default {
   "shared.shareLine": "Check out this PC build on ApexCore: {parts}",
   "shared.shareVia": "Share this build",
   "shared.signUp": "Start free — no card needed",
+  "landing.sharesSub": "Builds that ApexCore members shared publicly — open any card for its full spec and estimated FPS.",
+  "landing.sharesTitle": "Recently shared builds",
 }

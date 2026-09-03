@@ -16,6 +16,15 @@ const FEATURES = [
   { icon: '⚖️', tKey: 'f7', dKey: 'f7d', to: '/pc/compare' },
 ];
 
+const SHARE_SYM = { USD: '$', EUR: '€', GBP: '£', SEK: 'kr' };
+function shareMoney(v, cur) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const s = Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const sym = SHARE_SYM[cur] || '';
+  return cur === 'SEK' ? `${s} ${sym}` : `${sym}${s}`;
+}
+
 const STEPS = [
   { n: '01', tKey: 's1', dKey: 's1d' },
   { n: '02', tKey: 's2', dKey: 's2d' },
@@ -89,9 +98,11 @@ export default function Landing() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [stats, setStats] = useState(null);
+  const [shares, setShares] = useState([]);
 
   useEffect(() => {
     api.get('/public/stats').then(setStats).catch(() => setStats(null));
+    api.get('/public/builds').then((d) => setShares(d.builds || [])).catch(() => {});
   }, []);
 
   const totalComponents = stats ? Object.values(stats.hardware || {}).reduce((a, b) => a + b, 0) : null;
@@ -132,6 +143,31 @@ export default function Landing() {
         <Stat value={stats?.sources?.length} label={t('landing.statSources')} />
         <Stat value={stats?.ai?.available ? 'ONLINE' : 'OFF'} label={t('landing.statAi')} live={stats?.ai?.available} />
       </div>
+
+      {shares.length > 0 && (
+        <>
+          <h2 style={{ margin: '46px 0 8px' }}>{t('landing.sharesTitle')}</h2>
+          <p style={{ margin: '0 0 18px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{t('landing.sharesSub')}</p>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 12 }}>
+            {shares.map((b) => (
+              <Link key={b.slug} to={`/pc/shared/${b.slug}`} style={{ textDecoration: 'none' }} onClick={() => track('shared_build_view', { build: b.slug })}>
+                <div className="card hover" style={{ padding: 16, height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontWeight: 650, fontSize: '0.92rem' }}>{b.name}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>{(b.head || []).join(' · ') || '—'}</div>
+                  <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: '1.05rem', background: 'var(--primary-grad)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+                      {shareMoney(b.total_price, b.currency)}
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {b.owner?.display_name || b.owner?.username}{b.resolution ? ` · ${b.resolution}` : ''}{b.target_fps ? ` · ${b.target_fps} FPS` : ''}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginTop: 40 }}>
         {STEPS.map((s) => (
