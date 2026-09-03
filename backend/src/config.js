@@ -30,7 +30,7 @@ export const config = {
     smtpPort: Number(process.env.SMTP_PORT || 587),
     smtpUser: process.env.SMTP_USER || '',
     smtpPass: process.env.SMTP_PASS || '',
-    from: process.env.EMAIL_FROM || 'Gaming Performance Platform <no-reply@gamingplatform.local>',
+    from: process.env.EMAIL_FROM || 'ApexCore <no-reply@gamingplatform.local>',
   },
   ai: {
     apiKey: process.env.USER_LLM_API_KEY || '',
