@@ -8,6 +8,7 @@ import { sendMail } from '../utils/mailer.js';
 import { config } from '../config.js';
 import { partsDetail, totalPrice, resolvePart } from '../services/pcParts.js';
 import { buildPc } from '../engines/builder.js';
+import { getAmazonPriceStatus } from '../services/amazonPrices.js';
 
 const router = Router();
 
@@ -225,6 +226,11 @@ router.get('/profile/:slug', (req, res) => {
       achievements,
     },
   });
+});
+
+// GET /api/public/price-status — Amazon live-price transparency (public).
+router.get('/price-status', (req, res) => {
+  ok(res, { prices: getAmazonPriceStatus() });
 });
 
 export default router;

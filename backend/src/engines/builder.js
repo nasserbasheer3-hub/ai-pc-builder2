@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { checkCompatibility } from './compatibility.js';
 import { estimateFps } from './fps.js';
 import { storeSearchLinks } from '../utils/partStore.js';
-import { applyAmazonLive } from '../services/amazonPrices.js';
+import { applyAmazonLive, warmPrices } from '../services/amazonPrices.js';
 
 const FX = { USD: 1, EUR: 1.09, GBP: 1.27 };
 
@@ -152,6 +152,7 @@ export function buildPc(input) {
   };
 
   const amazonCount = applyAmazonLive(built.parts, currency);
+  warmPrices(currency, Object.entries(built.parts).map(([key, p]) => ({ key, id: p.id, name: p.name })));
   if (amazonCount > 0) {
     const amazonTotal = Math.round(Object.values(built.parts).reduce((s, p) => s + (Number(p.price) || 0), 0));
     built.totalPrice = amazonTotal;

@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { storeSearchLinks } from '../utils/partStore.js';
-import { applyAmazonLive } from './amazonPrices.js';
+import { applyAmazonLive, warmPrices } from './amazonPrices.js';
 
 export const PART_TABLES = {
   cpu: 'cpus', gpu: 'gpus', motherboard: 'motherboards', ram: 'memory_modules',
@@ -53,7 +53,10 @@ export function partsDetail(config, currency) {
       store: storeSearchLinks(row.name, currency || 'USD'),
     };
   }
-  if (currency) applyAmazonLive(parts, currency);
+  if (currency) {
+    applyAmazonLive(parts, currency);
+    warmPrices(currency, Object.keys(parts).map((key) => ({ key, id: parts[key].id, name: parts[key].name })));
+  }
   return parts;
 }
 

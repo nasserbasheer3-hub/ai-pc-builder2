@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { ok } from '../utils/helpers.js';
 import { storeSearchLinks } from '../utils/partStore.js';
+import { warmPrices } from '../services/amazonPrices.js';
 
 const router = Router();
 
@@ -39,6 +40,7 @@ router.get('/', (req, res) => {
     else if (sort === 'index' && (col === 'cpus' || col === 'gpus')) sql += ' ORDER BY performance_index DESC';
     else sql += ' ORDER BY name ASC';
     const items = db.prepare(sql).all(...params).map((r) => ({ ...r, category, store: storeSearchLinks(r.name) }));
+    warmPrices('USD', items.map((r) => ({ ptype: category, id: r.id, name: r.name })));
     return ok(res, { items, label: table.label, priceNote: 'Prices are approximate aggregate street estimates (USD/EUR/GBP) dated 2025-06-15.' });
   }
   // list all categories with counts

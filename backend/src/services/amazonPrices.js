@@ -8,6 +8,7 @@
 
 import { db } from '../db.js';
 import { config } from '../config.js';
+import { searchAmazon } from '../utils/amazon.js';
 
 export function isAmazonConfigured() {
   return Boolean(config.amazon?.accessKey && config.amazon?.secretKey && config.amazon?.partnerTag);
@@ -109,4 +110,99 @@ export function applyAmazonLive(parts, currency) {
     applied += 1;
   }
   return applied;
+}
+
+// ---------------------------------------------------------------------------
+// On-demand warming.
+//
+// A single in-process runner serves every request (builds, shared pages,
+// catalog browsing) so PA-API is never called more than ~1x/second no matter
+// how many visitors are online. Only parts that are missing a still-fresh row
+// are enqueued; failed lookups are retried no sooner than 30 minutes so a bad
+// credential cannot cause a request loop. Serving never waits on the network:
+// this fills the cache in the background and later requests show live prices.
+// ---------------------------------------------------------------------------
+
+const RETRY_AFTER_ERROR_MS = 30 * 60 * 1000;
+const MIN_GAP_MS = 1100;
+const QUEUE_CAP = 600;
+
+const queue = new Map(); // key `${currency}:${ptype}:${id}` -> { currency, ptype, id, name }
+let runner = null;
+let nextAllowedAt = 0;
+
+function shouldFetch(currency, ptype, id) {
+  if (!isAmazonConfigured()) return false;
+  if (freshAmazonPrice(ptype, id, currency)) return false;
+  const err = db.prepare(
+    "SELECT fetched_at FROM amazon_prices WHERE ptype=? AND part_id=? AND currency=? AND status='error'"
+  ).get(ptype, Number(id), currency);
+  if (err && Date.now() - new Date(err.fetched_at).getTime() < RETRY_AFTER_ERROR_MS) return false;
+  return true;
+}
+
+export function warmPrices(currency, entries) {
+  if (!isAmazonConfigured()) return 0;
+  const mpCurrency = ['USD', 'EUR', 'GBP'].includes(currency) ? currency : null;
+  if (!mpCurrency) return 0;
+  let added = 0;
+  for (const e of entries || []) {
+    const ptype = PTYPE_BY_PART_KEY[e.key] || e.ptype;
+    const name = e.name;
+    const id = Number(e.id);
+    if (!ptype || !id || !name) continue;
+    const key = `${mpCurrency}:${ptype}:${id}`;
+    if (queue.has(key) || !shouldFetch(mpCurrency, ptype, id)) continue;
+    if (queue.size >= QUEUE_CAP) break;
+    queue.set(key, { currency: mpCurrency, ptype, id, name });
+    added += 1;
+  }
+  if (added && !runner) runner = drain();
+  return added;
+}
+
+async function drain() {
+  while (queue.size) {
+    const [key, job] = queue.entries().next().value;
+    queue.delete(key);
+    const wait = nextAllowedAt - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    nextAllowedAt = Date.now() + MIN_GAP_MS;
+    try {
+      const result = await searchAmazon({
+        accessKey: config.amazon.accessKey, secretKey: config.amazon.secretKey,
+        partnerTag: config.amazon.partnerTag, currency: job.currency, keywords: job.name,
+      });
+      saveAmazonPrice({ ptype: job.ptype, partId: job.id, currency: job.currency, result });
+      console.log(`[amazon] warm ${job.currency} ${job.name} -> ${result?.display || 'no offer'}`);
+    } catch (e) {
+      saveAmazonPrice({ ptype: job.ptype, partId: job.id, currency: job.currency, result: null, error: e.message });
+      console.log(`[amazon] warm ${job.currency} ${job.name} FAILED: ${e.message}`);
+    }
+  }
+  runner = null;
+  if (queue.size) runner = drain();
+}
+
+// Lightweight transparency for admins: what is configured and how healthy is
+// the price cache. Used by the public /api/pc/price-status endpoint.
+export function getAmazonPriceStatus() {
+  const counts = {};
+  for (const currency of ['USD', 'EUR', 'GBP']) {
+    const row = db.prepare(
+      `SELECT
+         SUM(status='ok') AS ok, SUM(status='error') AS err
+       FROM amazon_prices WHERE currency=?`
+    ).get(currency);
+    counts[currency] = { ok: row.ok || 0, error: row.err || 0, queue: 0 };
+  }
+  const entries = [...queue.values()];
+  for (const q of entries) counts[q.currency] = counts[q.currency] || { ok: 0, error: 0, queue: 0 };
+  for (const q of entries) counts[q.currency].queue += 1;
+  return {
+    configured: isAmazonConfigured(),
+    partnerTag: isAmazonConfigured() ? config.amazon.partnerTag : '',
+    ttlHours: config.amazon?.ttlHours || 72,
+    counts,
+  };
 }
