@@ -123,7 +123,7 @@ export function applyAmazonLive(parts, currency) {
 // this fills the cache in the background and later requests show live prices.
 // ---------------------------------------------------------------------------
 
-const RETRY_AFTER_ERROR_MS = 30 * 60 * 1000;
+const RETRY_AFTER_ERROR_MS = 5 * 60 * 1000;
 const MIN_GAP_MS = 1100;
 const QUEUE_CAP = 600;
 

@@ -69,10 +69,10 @@ export async function searchAmazon({ accessKey, secretKey, partnerTag, currency,
     PartnerTag: partnerTag,
     PartnerType: 'Associates',
     Marketplace: mp.marketplace,
-    ItemCount: 5,
+    ItemCount: 3,
     Resources: [
       'ItemInfo.Title',
-      'Offers.Listings.Availability',
+      'Offers.Listings.Availability.Type',
       'Offers.Listings.Price',
       'Offers.Summaries.LowestPrice',
     ],
@@ -80,13 +80,40 @@ export async function searchAmazon({ accessKey, secretKey, partnerTag, currency,
   const payload = JSON.stringify(body);
   const date = new Date();
 
-  const auth = signRequest({ accessKey, secretKey, host: mp.host, region: mp.region, payload, date });
+  let last = null;
+  const common = { accessKey, secretKey, host: mp.host, region: mp.region, partnerTag, date, marketplace: mp.marketplace, currency, keywords };
+  for (const variant of [payload, minimalPayload(partnerTag, mp.marketplace)]) {
+    try {
+      return await doSearch({ ...common, payload: variant });
+    } catch (e) {
+      last = e;
+      // "coral InternalFailure" (HTTP 404) usually means the request shape is
+      // rejected; retry with the most conservative payload before reporting.
+      if (!/coral|InternalFailure/i.test(e.message)) throw e;
+    }
+  }
+  throw last;
 
-  const res = await fetch(`https://${mp.host}${PATH}`, {
+  function minimalPayload(tag, marketplace) {
+    return JSON.stringify({
+      Keywords: String(keywords).slice(0, 512),
+      PartnerTag: tag,
+      PartnerType: 'Associates',
+      Marketplace: marketplace,
+      ItemCount: 3,
+      Resources: ['Offers.Listings.Price', 'Offers.Listings.Availability.Type'],
+    });
+  }
+}
+
+async function doSearch({ accessKey, secretKey, host, region, payload, date, marketplace, currency, keywords }) {
+  const auth = signRequest({ accessKey, secretKey, host, region, payload, date });
+
+  const res = await fetch(`https://${host}${PATH}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
-      'Host': mp.host,
+      'Host': host,
       'X-Amz-Date': date.toISOString().replace(/[:-]|\.\d{3}/g, ''),
       'Authorization': auth,
     },
@@ -115,7 +142,7 @@ export async function searchAmazon({ accessKey, secretKey, partnerTag, currency,
       best = {
         asin,
         title: item.ItemInfo?.Title?.DisplayValue || keywords,
-        url: `https://${mp.marketplace}/dp/${asin}`,
+        url: `https://${marketplace}/dp/${asin}`,
         price,
         currency,
         display: listing.Price.DisplayAmount,
