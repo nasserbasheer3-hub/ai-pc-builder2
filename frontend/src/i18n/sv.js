@@ -478,6 +478,7 @@ export default {
   "footer.tagline": "Spåra, analysera och förbättra dina spelframsteg med verifierad hårdvarudata och ärliga uppskattningar.",
   "footer.terms": "Användarvillkor",
   "footer.verifiedNote": "Verifierad & uppskattad data — källor angivna.",
+  "footer.affiliate": "Som Amazon Associate tjänar ApexCore provision på kvalificerade köp via Amazons länkar på denna webbplats.",
   "friends.accept": "Acceptera",
   "friends.addFriend": "Lägg till vän",
   "friends.cancel": "Avbryt",

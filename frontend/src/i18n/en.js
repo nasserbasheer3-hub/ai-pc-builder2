@@ -478,6 +478,7 @@ export default {
   "footer.tagline": "Track, analyse and improve your gaming performance with verified hardware data and honest estimates.",
   "footer.terms": "Terms of service",
   "footer.verifiedNote": "Verified & estimated data — sources disclosed.",
+  "footer.affiliate": "As an Amazon Associate, ApexCore earns from qualifying purchases made through the Amazon links on this site.",
   "friends.accept": "Accept",
   "friends.addFriend": "Add friend",
   "friends.cancel": "Cancel",

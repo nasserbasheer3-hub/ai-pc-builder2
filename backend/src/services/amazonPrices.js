@@ -106,7 +106,10 @@ export function applyAmazonLive(parts, currency) {
     part.price_date = (row.fetched_at || '').slice(0, 10) || null;
     part.price_source = 'amazon';
     part.live = { asin: row.asin, url: row.url, title: row.title };
-    if (row.url && part.store) part.store.amazon = row.url;
+    if (row.url && part.store) {
+      const tag = config.amazon?.partnerTag ? encodeURIComponent(config.amazon.partnerTag) : '';
+      part.store.amazon = tag ? `${row.url}${row.url.includes('?') ? '&' : '?'}tag=${tag}` : row.url;
+    }
     applied += 1;
   }
   return applied;
@@ -126,10 +129,14 @@ export function applyAmazonLive(parts, currency) {
 const RETRY_AFTER_ERROR_MS = 5 * 60 * 1000;
 const MIN_GAP_MS = 1100;
 const QUEUE_CAP = 600;
+const CIRCUIT_OPEN_FAILS = 10; // consecutive errors -> pause this currency 1h
+const CIRCUIT_PAUSE_MS = 60 * 60 * 1000;
 
 const queue = new Map(); // key `${currency}:${ptype}:${id}` -> { currency, ptype, id, name }
 let runner = null;
 let nextAllowedAt = 0;
+const fails = { USD: 0, EUR: 0, GBP: 0 };
+const pausedUntil = { USD: 0, EUR: 0, GBP: 0 };
 
 function shouldFetch(currency, ptype, id) {
   if (!isAmazonConfigured()) return false;
@@ -145,6 +152,7 @@ export function warmPrices(currency, entries) {
   if (!isAmazonConfigured()) return 0;
   const mpCurrency = ['USD', 'EUR', 'GBP'].includes(currency) ? currency : null;
   if (!mpCurrency) return 0;
+  if (pausedUntil[mpCurrency] && Date.now() < pausedUntil[mpCurrency]) return 0;
   let added = 0;
   for (const e of entries || []) {
     const ptype = PTYPE_BY_PART_KEY[e.key] || e.ptype;
@@ -174,10 +182,19 @@ async function drain() {
         partnerTag: config.amazon.partnerTag, currency: job.currency, keywords: job.name,
       });
       saveAmazonPrice({ ptype: job.ptype, partId: job.id, currency: job.currency, result });
+      fails[job.currency] = 0;
       console.log(`[amazon] warm ${job.currency} ${job.name} -> ${result?.display || 'no offer'}`);
     } catch (e) {
       saveAmazonPrice({ ptype: job.ptype, partId: job.id, currency: job.currency, result: null, error: e.message });
+      fails[job.currency] = (fails[job.currency] || 0) + 1;
       console.log(`[amazon] warm ${job.currency} ${job.name} FAILED: ${e.message}`);
+      // Circuit breaker: a brand-new Associates account is blocked from PA-API
+      // until approved + qualifying sales, so stop retrying that currency for
+      // a while instead of burning requests on an entitlement error.
+      if (fails[job.currency] >= CIRCUIT_OPEN_FAILS) {
+        pausedUntil[job.currency] = Date.now() + CIRCUIT_PAUSE_MS;
+        console.log(`[amazon] pausing ${job.currency} warm-fill for ${CIRCUIT_PAUSE_MS / 60000} min (likely PA-API entitlement block).`);
+      }
     }
   }
   runner = null;
@@ -194,10 +211,10 @@ export function getAmazonPriceStatus() {
          SUM(status='ok') AS ok, SUM(status='error') AS err
        FROM amazon_prices WHERE currency=?`
     ).get(currency);
-    counts[currency] = { ok: row.ok || 0, error: row.err || 0, queue: 0 };
+    counts[currency] = { ok: row.ok || 0, error: row.err || 0, queue: 0, paused: Boolean(pausedUntil[currency] && Date.now() < pausedUntil[currency]) };
   }
   const entries = [...queue.values()];
-  for (const q of entries) counts[q.currency] = counts[q.currency] || { ok: 0, error: 0, queue: 0 };
+  for (const q of entries) counts[q.currency] = counts[q.currency] || { ok: 0, error: 0, queue: 0, paused: false };
   for (const q of entries) counts[q.currency].queue += 1;
   const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const recentErrors = db.prepare(

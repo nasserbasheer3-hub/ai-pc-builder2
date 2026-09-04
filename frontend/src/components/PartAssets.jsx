@@ -135,7 +135,7 @@ export function StoreLinks({ store, name, size = 'sm' }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
       {items.map(([label, href]) => (
-        <a key={label} href={href} target="_blank" rel="noopener noreferrer"
+        <a key={label} href={href} target="_blank" rel="sponsored noopener noreferrer"
            onClick={(e) => e.stopPropagation()}
            title={name ? `Check current price for ${name}` : 'Check current price'}
            style={{
@@ -159,6 +159,17 @@ export function RefDate({ date, live }) {
   return (
     <div style={{ fontSize: '0.62rem', color: 'var(--text-faint)', marginTop: 2 }}>
       {prefix} · {label}
+    </div>
+  );
+}
+
+// Honest one-liner shown wherever Amazon store links appear: we may earn as an
+// Associate, and the store price is the only current one until the day the
+// Product Advertising API data covers every catalog row.
+export function StoreNote({ compact }) {
+  return (
+    <div style={{ fontSize: compact ? '0.6rem' : '0.68rem', color: 'var(--text-faint)', lineHeight: 1.5, maxWidth: 520 }}>
+      {compact ? 'We may earn from qualifying Amazon purchases. Store prices/availability change — confirm in the cart before ordering.' : 'As an Amazon Associate we may earn from qualifying purchases. Reference prices are dated estimates and can differ from today\'s store price — always confirm in the store cart before ordering.'}
     </div>
   );
 }

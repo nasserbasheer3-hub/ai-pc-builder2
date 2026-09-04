@@ -478,6 +478,7 @@ export default {
   "footer.tagline": "تتبّع، حلّل، وحسّن أداءك في الألعاب ببيانات عتاد موثّقة وتقديرات صادقة.",
   "footer.terms": "شروط الخدمة",
   "footer.verifiedNote": "بيانات موثّقة وتقديرية — المصادر معلنة.",
+  "footer.affiliate": "بصفتنا شريكًا في برنامج Amazon Associates، قد تربح ApexCore عمولة من عمليات الشراء المؤهلة عبر روابط Amazon في هذا الموقع.",
   "friends.accept": "قبول",
   "friends.addFriend": "إضافة صديق",
   "friends.cancel": "إلغاء",

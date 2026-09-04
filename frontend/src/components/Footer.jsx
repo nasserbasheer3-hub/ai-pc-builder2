@@ -38,6 +38,9 @@ export default function Footer() {
         <span>{t('footer.copyright', { year: new Date().getFullYear() })}</span>
         <span>{t('footer.verifiedNote')}</span>
       </div>
+      <div style={{ maxWidth: 980, margin: '10px auto 0', color: 'var(--text-faint)', fontSize: '0.72rem', lineHeight: 1.5 }}>
+        {t('footer.affiliate')}
+      </div>
     </footer>
   );
 }

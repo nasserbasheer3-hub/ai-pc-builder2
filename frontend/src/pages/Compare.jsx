@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useI18n } from '../i18n/index.jsx';
 import { useToast, LoadingBlock } from '../components/ui.jsx';
-import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
+import { PartImage, StoreLinks, RefDate, StoreNote } from '../components/PartAssets.jsx';
 import { useSeo } from '../hooks/useSeo.js';
 
 const BEST_FN = {
@@ -204,6 +204,7 @@ export default function Compare() {
             )}
           </div>
 
+          <div style={{ marginTop: 10 }}><StoreNote compact /></div>
           {chosen.length >= 2 ? (
             <div className="card" style={{ padding: 18, marginTop: 22, overflowX: 'auto' }}>
               <table className="table">

@@ -1,19 +1,22 @@
-// Non-affiliate store deep-search links.
+// Store deep-search links for a part.
 //
-// The catalog prices are verified aggregate street estimates with a date, and
-// there are no per-part merchant SKUs or affiliate tokens yet, so instead of
-// inventing product pages we link to a store SEARCH for the exact part name.
-// This is always real and lets a buyer "check the current price" in the store.
-// When an affiliate integration (e.g. Amazon Product Advertising API) is added
-// later, replace the objects here - the field shape stays {amazon, google}.
+// Amazon links carry the site's real Amazon Associates tag when the operator
+// has set AMAZON_PARTNER_TAG, so qualifying purchases are credited to the
+// account that will later unlock the Product Advertising API. When no tag is
+// configured the links are plain, non-affiliate searches. Google Shopping is
+// always a plain (non-affiliate) fallback. All links point at a live search
+// for the exact part name - nothing is ever fabricated.
+
+import { config } from '../config.js';
 
 const AMAZON_DOMAINS = { USD: 'www.amazon.com', EUR: 'www.amazon.de', GBP: 'www.amazon.co.uk' };
 
 export function storeSearchLinks(name, currency = 'USD') {
   const q = encodeURIComponent(String(name || '').trim());
   const host = AMAZON_DOMAINS[currency] || AMAZON_DOMAINS.USD;
+  const tag = config.amazon?.partnerTag ? `&tag=${encodeURIComponent(config.amazon.partnerTag)}` : '';
   return {
-    amazon: `https://${host}/s?k=${q}`,
+    amazon: `https://${host}/s?k=${q}${tag}`,
     google: `https://www.google.com/search?tbm=shop&q=${q}`,
   };
 }
