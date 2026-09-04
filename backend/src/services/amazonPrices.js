@@ -199,10 +199,15 @@ export function getAmazonPriceStatus() {
   const entries = [...queue.values()];
   for (const q of entries) counts[q.currency] = counts[q.currency] || { ok: 0, error: 0, queue: 0 };
   for (const q of entries) counts[q.currency].queue += 1;
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const recentErrors = db.prepare(
+    "SELECT error, COUNT(*) AS n FROM amazon_prices WHERE status='error' AND fetched_at >= ? GROUP BY error ORDER BY n DESC LIMIT 6"
+  ).all(cutoff);
   return {
     configured: isAmazonConfigured(),
     partnerTag: isAmazonConfigured() ? config.amazon.partnerTag : '',
     ttlHours: config.amazon?.ttlHours || 72,
     counts,
+    recentErrors,
   };
 }
