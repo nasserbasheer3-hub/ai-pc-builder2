@@ -59,66 +59,58 @@ function signRequest({ accessKey, secretKey, host, region, payload, date }) {
 // Returns { title, asin, url, price, currency, display, available } for the
 // best offer Amazon returns for a keyword search, or null when no buyable
 // listing exists. Throws on transport/auth errors so callers can log honestly.
-export async function searchAmazon({ accessKey, secretKey, partnerTag, currency, keywords }) {
-  const mp = marketplaceFor(currency);
-  if (!mp) throw new Error(`No Amazon marketplace for currency ${currency}`);
-  if (!accessKey || !secretKey || !partnerTag) throw new Error('Amazon PA-API is not configured (missing keys/tag).');
+export async function searchAmazon(opts) {
+  const out = await searchAmazonVerbose(opts);
+  if (out.error) throw out.error;
+  return out.result;
+}
 
-  const body = {
+// Same call but never throws: returns the raw outcome plus the exact HTTP
+// status/body from Amazon so credential/eligibility issues are diagnosable.
+export async function searchAmazonVerbose(opts) {
+  const { accessKey, secretKey, partnerTag, currency, keywords } = opts;
+  const mp = marketplaceFor(currency);
+  if (!mp) return { result: null, error: new Error(`No Amazon marketplace for currency ${currency}`), status: 0, body: '' };
+  if (!accessKey || !secretKey || !partnerTag) return { result: null, error: new Error('Amazon PA-API is not configured (missing keys/tag).'), status: 0, body: '' };
+
+  const base = {
     Keywords: String(keywords).slice(0, 512),
     PartnerTag: partnerTag,
     PartnerType: 'Associates',
     Marketplace: mp.marketplace,
     ItemCount: 3,
-    Resources: [
-      'ItemInfo.Title',
-      'Offers.Listings.Availability.Type',
-      'Offers.Listings.Price',
-      'Offers.Summaries.LowestPrice',
-    ],
   };
-  const payload = JSON.stringify(body);
-  const date = new Date();
+  const fullPayload = JSON.stringify({ ...base, Resources: ['ItemInfo.Title', 'Offers.Listings.Availability.Type', 'Offers.Listings.Price', 'Offers.Summaries.LowestPrice'] });
+  const minimalPayload = JSON.stringify({ ...base, Resources: ['Offers.Listings.Price', 'Offers.Listings.Availability.Type'] });
 
   let last = null;
-  const common = { accessKey, secretKey, host: mp.host, region: mp.region, partnerTag, date, marketplace: mp.marketplace, currency, keywords };
-  for (const variant of [payload, minimalPayload(partnerTag, mp.marketplace)]) {
-    try {
-      return await doSearch({ ...common, payload: variant });
-    } catch (e) {
-      last = e;
-      // "coral InternalFailure" (HTTP 404) usually means the request shape is
-      // rejected; retry with the most conservative payload before reporting.
-      if (!/coral|InternalFailure/i.test(e.message)) throw e;
-    }
+  for (const payload of [fullPayload, minimalPayload]) {
+    const raw = await doSearchRaw({ accessKey, secretKey, host: mp.host, region: mp.region, payload, marketplace: mp.marketplace, currency, keywords });
+    if (raw.error) { last = raw; if (!/coral|InternalFailure/i.test(raw.error.message)) return raw; continue; }
+    return raw;
   }
-  throw last;
-
-  function minimalPayload(tag, marketplace) {
-    return JSON.stringify({
-      Keywords: String(keywords).slice(0, 512),
-      PartnerTag: tag,
-      PartnerType: 'Associates',
-      Marketplace: marketplace,
-      ItemCount: 3,
-      Resources: ['Offers.Listings.Price', 'Offers.Listings.Availability.Type'],
-    });
-  }
+  return last || { result: null, error: new Error('Amazon request failed'), status: 0, body: '' };
 }
 
-async function doSearch({ accessKey, secretKey, host, region, payload, date, marketplace, currency, keywords }) {
+async function doSearchRaw({ accessKey, secretKey, host, region, payload, marketplace, currency, keywords }) {
+  const date = new Date();
   const auth = signRequest({ accessKey, secretKey, host, region, payload, date });
 
-  const res = await fetch(`https://${host}${PATH}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Host': host,
-      'X-Amz-Date': date.toISOString().replace(/[:-]|\.\d{3}/g, ''),
-      'Authorization': auth,
-    },
-    body: payload,
-  });
+  let res;
+  try {
+    res = await fetch(`https://${host}${PATH}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Host': host,
+        'X-Amz-Date': date.toISOString().replace(/[:-]|\.\d{3}/g, ''),
+        'Authorization': auth,
+      },
+      body: payload,
+    });
+  } catch (e) {
+    return { result: null, error: new Error(`Amazon request transport error: ${e.message}`), status: 0, body: '' };
+  }
 
   const text = await res.text();
   let json = null;
@@ -127,7 +119,7 @@ async function doSearch({ accessKey, secretKey, host, region, payload, date, mar
   if (!res.ok || !json || json.Errors) {
     const code = json?.Errors?.[0]?.Code || `HTTP ${res.status}`;
     const msg = json?.Errors?.[0]?.Message || text.slice(0, 300);
-    throw new Error(`Amazon search failed (${code}): ${msg}`);
+    return { result: null, error: new Error(`Amazon search failed (${code}): ${msg}`), status: res.status, body: text };
   }
 
   const items = Array.isArray(json.SearchResult?.Items) ? json.SearchResult.Items.filter((it) => it) : [];
@@ -150,7 +142,7 @@ async function doSearch({ accessKey, secretKey, host, region, payload, date, mar
       };
     }
   }
-  return best;
+  return { result: best, error: null, status: res.status, body: text };
 }
 
 // Amounts arrive as localized strings like "US$1,999.99", "EUR 2.099,00",

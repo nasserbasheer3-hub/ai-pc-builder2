@@ -10,7 +10,8 @@
     "seed": "node src/seed.js",
     "validate:catalog": "node scripts/validate-catalog.js",
     "backup": "node scripts/backup-db.js",
-    "prices:amazon": "node scripts/fetch-amazon-prices.js"
+    "prices:amazon": "node scripts/fetch-amazon-prices.js",
+    "prices:debug": "node scripts/debug-amazon.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
