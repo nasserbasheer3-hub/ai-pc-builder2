@@ -5,12 +5,19 @@ import { getGames } from '../api/catalog.js';
 import { useI18n } from '../i18n/index.jsx';
 import { Card, CardHead, Badge, Spinner, useToast } from '../components/ui.jsx';
 import { PartImage, StoreLinks, RefDate } from '../components/PartAssets.jsx';
+import BuildVariants from '../components/BuildVariants.jsx';
 import { track } from '../utils/analytics.js';
 
 const CATS = [
   ['cpu', 'pccomp.cpu'], ['gpu', 'pccomp.gpu'], ['motherboard', 'pccomp.motherboard'], ['ram', 'pccomp.memory'],
   ['storage', 'pccomp.storage'], ['psu', 'pccomp.psu'], ['case', 'pccomp.case'], ['cooler', 'pccomp.cooler'],
 ];
+
+const STORAGE_PRESETS = {
+  p1: { gb: 1000, type: 'nvme' }, p2: { gb: 2000, type: 'nvme' }, p3: { gb: 4000, type: 'nvme' },
+  p4: { gb: 1000, type: 'sata' }, p5: { gb: 2000, type: 'sata' },
+};
+const WANT_CONFIGS = 32; // how many distinct builds the engine returns at most
 
 export default function TryBuilder() {
   const toast = useToast();
@@ -24,6 +31,10 @@ export default function TryBuilder() {
   const [cpuPref, setCpuPref] = useState('any');
   const [gpuPref, setGpuPref] = useState('any');
   const [ramGb, setRamGb] = useState(32);
+  const [caseSize, setCaseSize] = useState('auto');
+  const [noise, setNoise] = useState('balanced');
+  const [storagePreset, setStoragePreset] = useState('p1');
+  const [activeVariant, setActiveVariant] = useState(0);
   const [selected, setSelected] = useState([]);
   const [building, setBuilding] = useState(false);
   const [result, setResult] = useState(null);
@@ -38,17 +49,21 @@ export default function TryBuilder() {
 
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
+  const pre = STORAGE_PRESETS[storagePreset] || STORAGE_PRESETS.p1;
   const run = async () => {
     if (budget < 300) return toast.err(t('pcbuilder.budgetMin'));
     track('try_generate', { budget: Number(budget), currency, resolution });
     setBuilding(true);
     setErr('');
     setResult(null);
+    setActiveVariant(0);
     try {
       const r = await api.post('/public/build', {
         budget: Number(budget), currency, games: selected, resolution,
         targetFps: Number(targetFps), purpose,
         cpuPreference: cpuPref, gpuPreference: gpuPref, ramGb: Number(ramGb),
+        caseSize, noisePreference: noise, storageGb: pre.gb, storageType: pre.type,
+        count: WANT_CONFIGS,
       });
       if (r.status === 'ready') setResult(r);
       else setErr(r.message || t('try.noBuild'));
@@ -56,6 +71,9 @@ export default function TryBuilder() {
       setErr(e.message || t('try.noBuild'));
     } finally { setBuilding(false); }
   };
+
+  const plans = result ? [result, ...(result.alternatives || [])] : [];
+  const cur = plans.length ? plans[Math.min(activeVariant, plans.length - 1)] : null;
 
   return (
     <div className="page" style={{ maxWidth: 1080, margin: '0 auto' }}>
@@ -112,6 +130,31 @@ export default function TryBuilder() {
               <option value="16">16 GB</option><option value="32">32 GB</option><option value="64">64 GB</option>
             </select>
           </div>
+          <div className="grid cols-3" style={{ marginTop: 2 }}>
+            <div className="field"><label>{t('pcbuilder.caseSize')}</label>
+              <select className="select" value={caseSize} onChange={(e) => setCaseSize(e.target.value)}>
+                <option value="auto">{t('pcbuilder.caseAuto')}</option>
+                <option value="ATX">{t('pcbuilder.caseAtx')}</option>
+                <option value="microATX">{t('pcbuilder.caseMicroAtx')}</option>
+              </select>
+            </div>
+            <div className="field"><label>{t('pcbuilder.noisePref')}</label>
+              <select className="select" value={noise} onChange={(e) => setNoise(e.target.value)}>
+                <option value="balanced">{t('pcbuilder.noiseBalanced')}</option>
+                <option value="quiet">{t('pcbuilder.noiseQuiet')}</option>
+                <option value="performance">{t('pcbuilder.noisePerformance')}</option>
+              </select>
+            </div>
+            <div className="field"><label>{t('pcbuilder.storage')}</label>
+              <select className="select" value={storagePreset} onChange={(e) => setStoragePreset(e.target.value)}>
+                <option value="p1">{t('pcbuilder.storageP1')}</option>
+                <option value="p2">{t('pcbuilder.storageP2')}</option>
+                <option value="p3">{t('pcbuilder.storageP3')}</option>
+                <option value="p4">{t('pcbuilder.storageP4')}</option>
+                <option value="p5">{t('pcbuilder.storageP5')}</option>
+              </select>
+            </div>
+          </div>
 
           <div className="field"><label>{t('try.targetGames')} <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>{t('try.sampleNote')}</span></label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -135,20 +178,21 @@ export default function TryBuilder() {
                 <p style={{ marginTop: 16 }}>{t('try.building')}</p>
               </div>
             </Card>
-          ) : result ? (
+          ) : result && cur ? (
             <Card tilt>
-              <CardHead title={<>📦 {t('try.yourBuild')}</>}>
-                <Badge tone={result.withinBudget ? 'ok' : 'warn'}>{result.withinBudget ? t('pcbuilder.withinBudget') : t('pcbuilder.overBudget')}</Badge>
+              <CardHead title={<>{'📦 '}{t('try.yourBuild')} {plans.length > 1 ? `· ${activeVariant + 1}/${plans.length}` : ''}</>}>
+                <Badge tone={cur.withinBudget ? 'ok' : 'warn'}>{cur.withinBudget ? t('pcbuilder.withinBudget') : t('pcbuilder.overBudget')}</Badge>
               </CardHead>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', margin: '4px 0 12px' }}>
                 <span style={{ fontSize: '1.9rem', fontWeight: 800, fontFamily: 'var(--font-display)', background: 'var(--primary-grad)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-                  {result.totalPrice.toLocaleString()} {result.currency}
+                  {cur.totalPrice.toLocaleString()} {cur.currency}
                 </span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>{t('pcbuilder.total')} · {result.resolution} · {result.targetFps} FPS</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>{t('pcbuilder.total')} · {cur.resolution} · {cur.targetFps} FPS</span>
               </div>
+              <BuildVariants plans={plans} active={activeVariant} onPick={setActiveVariant} targetFps={cur.targetFps || 60} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 {CATS.map(([key, label]) => {
-                  const p = result.parts[key];
+                  const p = cur.parts?.[key];
                   if (!p) return null;
                   return (
                     <div key={key} style={{ padding: '9px 12px', background: 'rgba(0,0,0,0.25)', borderRadius: 12, border: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -157,7 +201,7 @@ export default function TryBuilder() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                           <div><span style={{ fontSize: '0.7rem', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t(label)}</span><div style={{ fontWeight: 600 }}>{p.name}</div></div>
                           <div style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                            <div style={{ fontWeight: 700, color: 'var(--primary-2)' }}>{p.price.toLocaleString()} {result.currency}</div>
+                            <div style={{ fontWeight: 700, color: 'var(--primary-2)' }}>{p.price.toLocaleString()} {cur.currency}</div>
                             <RefDate date={p.price_date} live={!!p.live} />
                           </div>
                         </div>
@@ -168,11 +212,11 @@ export default function TryBuilder() {
                   );
                 })}
               </div>
-              {result.expectedFps?.length > 0 && (
+              {cur.expectedFps?.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-faint)', fontWeight: 700 }}>🎮 {t('pcbuilder.expectedFps')}</div>
                   <div className="pill-row" style={{ marginTop: 6 }}>
-                    {result.expectedFps.map((f) => <Badge key={f.game} tone={f.fps != null ? 'primary' : ''}>{f.game}: {f.fps != null ? `~${f.fps} FPS` : t('pcbuilder.noVerifiedData')}</Badge>)}
+                    {cur.expectedFps.map((f) => <Badge key={f.game} tone={f.fps != null ? 'primary' : ''}>{f.game}: {f.fps != null ? `~${f.fps} FPS` : t('pcbuilder.noVerifiedData')}</Badge>)}
                   </div>
                 </div>
               )}
@@ -181,7 +225,7 @@ export default function TryBuilder() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', margin: '6px 0 14px' }}>{t('try.saveSub')}</p>
                 <Link to="/signup" className="btn btn-primary" onClick={() => track('cta_click', { action: 'try_save_signup' })}>{t('try.signupFree')}</Link>
               </div>
-              <p style={{ fontSize: '0.74rem', color: 'var(--text-faint)', marginTop: 12 }}>{result.note}</p>
+              <p style={{ fontSize: '0.74rem', color: 'var(--text-faint)', marginTop: 12 }}>{cur.note}</p>
             </Card>
           ) : err ? (
             <Card><div style={{ padding: 30, textAlign: 'center' }}><p style={{ color: 'var(--text-dim)' }}>{err}</p><button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { setErr(''); }}>{t('try.retry')}</button></div></Card>

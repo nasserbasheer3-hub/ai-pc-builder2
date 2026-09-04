@@ -21,7 +21,12 @@ const trialLimiter = rateLimit({
   message: { ok: false, code: 'RATE_LIMITED', message: 'Too many trial builds. Create a free account to keep building.' },
 });
 
+const CASE_SIZES = ['auto', 'ATX', 'microATX'];
+const NOISE_MODES = ['balanced', 'quiet', 'performance'];
+const STORAGE_TYPES = ['nvme', 'sata', 'any'];
+
 // POST /api/public/build — instant anonymous trial build (no account, no save).
+// May return many distinct verified configurations when `count` > 1.
 router.post('/build', trialLimiter, (req, res) => {
   const budget = Number(req.body?.budget);
   const currency = String(req.body?.currency || 'USD').toUpperCase();
@@ -30,9 +35,22 @@ router.post('/build', trialLimiter, (req, res) => {
     return fail(res, 422, 'VALIDATION', 'Budget must be between 300 and 100000.');
   }
   if (!supported.includes(currency)) return fail(res, 422, 'VALIDATION', 'Currency must be USD, EUR or GBP.');
+  const caseSize = String(req.body?.caseSize || 'auto').trim() || 'auto';
+  if (!CASE_SIZES.includes(caseSize)) {
+    return fail(res, 422, 'VALIDATION', 'Case size must be auto, ATX or microATX.');
+  }
+  const noisePreference = String(req.body?.noisePreference || 'balanced').trim() || 'balanced';
+  if (!NOISE_MODES.includes(noisePreference)) {
+    return fail(res, 422, 'VALIDATION', 'Noise preference must be balanced, quiet or performance.');
+  }
+  const storageType = String(req.body?.storageType || 'nvme').trim() || 'nvme';
+  if (!STORAGE_TYPES.includes(storageType)) {
+    return fail(res, 422, 'VALIDATION', 'Storage type must be nvme, sata or any.');
+  }
   const games = Array.isArray(req.body?.games)
     ? req.body.games.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 12)
     : [];
+  const count = Math.max(0, Math.min(Number(req.body?.count) || 0, 40));
   try {
     const result = buildPc({
       budget, currency, games,
@@ -40,12 +58,19 @@ router.post('/build', trialLimiter, (req, res) => {
       targetFps: Number(req.body?.targetFps) || 60,
       cpuPreference: req.body?.cpuPreference || 'any',
       gpuPreference: req.body?.gpuPreference || 'any',
-      ramGb: Number(req.body?.ramGb) || 32,
+      ramGb: Math.max(8, Math.min(Number(req.body?.ramGb) || 32, 64)),
       purpose: req.body?.purpose || 'gaming',
-    });
+      caseSize, noisePreference,
+      storageGb: Math.max(120, Math.min(Number(req.body?.storageGb) || 1000, 8000)),
+      storageType,
+    }, { alternatives: count >= 2 ? count - 1 : 0 });
     if (result.status !== 'ready') return ok(res, result);
     // Trial results are computed on the fly and never persisted.
-    return ok(res, { ...result, trial: true, note: 'Trial result - create a free account to save, compare and share your build.' });
+    return ok(res, {
+      ...result, trial: true,
+      configurations: count >= 2 ? (result.alternativeCount || result.alternatives?.length + 1 || 1) : 1,
+      note: 'Trial result - create a free account to save, compare and share your build.',
+    });
   } catch (e) {
     return fail(res, 400, 'BUILD_FAILED', e.message || 'Could not build a configuration.');
   }

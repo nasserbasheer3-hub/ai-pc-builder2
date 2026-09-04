@@ -81,32 +81,91 @@ async function maybeAiExplain(userId, systemKey, userPrompt) {
 }
 
 // POST /api/pc/build
+// Builds the best configuration (variant 0) and auto-saves it as a draft.
+// When `variants` > 1 the response also includes that many distinct verified
+// configurations; passing `variant` selects which one is persisted, so a user
+// can save any alternative from the generated menu.
 router.post('/build', (req, res, next) => {
   try {
-    const result = buildPc(req.body);
+    const wantVariants = Math.max(0, Math.min(Number(req.body?.variants) || 0, 40));
+    const variant = Math.max(0, Math.min(Number(req.body?.variant) || 0, wantVariants));
+    const result = buildPc(req.body, { alternatives: wantVariants >= 2 ? wantVariants - 1 : 0 });
     if (result.status !== 'ready') return ok(res, result);
     logEngine('pc_build', req.user.id);
     getAchievements(req.user.id);
+
+    // If the user picked an alternative from the generated menu, persist that
+    // one; otherwise persist the top recommendation (historical behaviour).
+    let chosen = result;
+    if (variant > 0 && Array.isArray(result.alternatives) && result.alternatives[variant - 1]) {
+      chosen = { ...result.alternatives[variant - 1], budget: result.budget, currency: result.currency };
+    }
 
     const buildId = db.prepare(`
       INSERT INTO pc_builds (user_id, budget, currency, games, resolution, target_fps, config_json, total_price, expected_fps, engine_reasoning, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
     `).run(
-      req.user.id, result.budget, result.currency, JSON.stringify(req.body.games || []),
+      req.user.id, chosen.budget, chosen.currency, JSON.stringify(req.body.games || []),
       req.body.resolution || '1080p', req.body.targetFps || null,
-      JSON.stringify(result.config), result.totalPrice,
-      JSON.stringify(result.expectedFps), JSON.stringify(result.parts),
+      JSON.stringify(chosen.config), chosen.totalPrice,
+      JSON.stringify(chosen.expectedFps), JSON.stringify(chosen.parts),
     ).lastInsertRowid;
 
     maybeAiExplain(
       req.user.id, 'ai_builder_prompt',
-      `Budget ${result.budget} ${result.currency}, games: ${(req.body.games || []).map((id) => db.prepare('SELECT name FROM games WHERE id=?').get(id)?.name).filter(Boolean).join(', ') || 'generic'}, resolution ${req.body.resolution || '1080p'}, target ${req.body.targetFps || 60} FPS.\nSelected build:\n${JSON.stringify(result.parts)}\nExplain each component choice concisely.`,
+      `Budget ${chosen.budget} ${chosen.currency}, games: ${(req.body.games || []).map((id) => db.prepare('SELECT name FROM games WHERE id=?').get(id)?.name).filter(Boolean).join(', ') || 'generic'}, resolution ${req.body.resolution || '1080p'}, target ${req.body.targetFps || 60} FPS.\nSelected build:\n${JSON.stringify(chosen.parts)}\nExplain each component choice concisely.`,
     ).then((ai) => {
       db.prepare('UPDATE pc_builds SET ai_summary=? WHERE id=?').run(ai.explanation, buildId);
-      ok(res, { ...result, buildId, ai: ai });
-    }).catch(() => ok(res, { ...result, buildId, ai: { explanation: null, error: 'AI service is temporarily unavailable. Please try again later.' } }));
+      const body = { ...chosen, buildId, ai };
+      if (wantVariants >= 2 && Array.isArray(result.alternatives)) {
+        body.alternatives = result.alternatives;
+        body.configurations = result.alternativeCount;
+      }
+      ok(res, body);
+    }).catch(() => {
+      const body = { ...chosen, buildId, ai: { explanation: null, error: 'AI service is temporarily unavailable. Please try again later.' } };
+      if (wantVariants >= 2 && Array.isArray(result.alternatives)) {
+        body.alternatives = result.alternatives;
+        body.configurations = result.alternativeCount;
+      }
+      ok(res, body);
+    });
   } catch (e) {
     return fail(res, 400, 'BUILD_FAILED', e.message || 'Could not build a configuration.');
+  }
+});
+
+// POST /api/pc/build/save-config — persist an already-generated configuration
+// (for example an alternative the user picked from the generated menu) without
+// re-running the engine. Used by the builder's "save this exact build" action.
+router.post('/build/save-config', (req, res) => {
+  try {
+    const cfg = req.body?.config || {};
+    const need = ['cpu', 'gpu', 'motherboard', 'ram', 'storage', 'psu', 'case', 'cooler'];
+    for (const k of need) {
+      const id = Number(cfg[k]);
+      if (!Number.isInteger(id) || id <= 0) return fail(res, 422, 'VALIDATION', 'A complete part configuration is required.');
+    }
+    const budget = Number(req.body?.budget) || null;
+    const currency = String(req.body?.currency || 'USD').toUpperCase();
+    const resolution = String(req.body?.resolution || '1080p');
+    const targetFps = Number(req.body?.targetFps) || 60;
+    const totalPrice = Math.round(Number(req.body?.totalPrice) || 0);
+    const games = Array.isArray(req.body?.games) ? req.body.games.map(Number).filter(Boolean).slice(0, 12) : [];
+    const parts = (req.body?.parts && typeof req.body.parts === 'object') ? req.body.parts : {};
+    const expectedFps = Array.isArray(req.body?.expectedFps) ? req.body.expectedFps : [];
+
+    const buildId = db.prepare(`
+      INSERT INTO pc_builds (user_id, budget, currency, games, resolution, target_fps, config_json, total_price, expected_fps, engine_reasoning, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).run(
+      req.user.id, budget, currency, JSON.stringify(games), resolution, targetFps,
+      JSON.stringify(cfg), totalPrice, JSON.stringify(expectedFps), JSON.stringify(parts),
+    ).lastInsertRowid;
+    logEngine('pc_build_save_variant', req.user.id);
+    return ok(res, { buildId });
+  } catch (e) {
+    return fail(res, 400, 'BUILD_FAILED', e.message || 'Could not save the configuration.');
   }
 });
 
