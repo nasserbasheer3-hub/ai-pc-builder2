@@ -5,6 +5,7 @@ import { useI18n } from '../i18n/index.jsx';
 import { api, ApiError } from '../api/client.js';
 import { Card, Badge, useToast, LoadingBlock } from '../components/ui.jsx';
 import { track, trackPurchase } from '../utils/analytics.js';
+import { resolveCurrencyMode, fxGbp, fmtGbp } from '../utils/money.js';
 
 const METHODS = [
   { id: 'card', labelKey: 'pricing.card' },
@@ -202,6 +203,7 @@ export default function Pricing() {
   if (!data) return <div className="page"><LoadingBlock text={t('common.loading')} /></div>;
 
   const currentSlug = me?.subscription?.slug;
+  const gbpMode = resolveCurrencyMode(params);
   const paidPayments = (me?.payments || []).filter((p) => p.status === 'paid');
   // The automatic first-month launch offer is a new-customer perk. Once anyone
   // has a paid subscription or a paid plan payment in their history, show them
@@ -290,6 +292,8 @@ export default function Pricing() {
           const showWas = showAuto && p.original_price_sek != null && p.price_sek < p.original_price_sek;
           const shownPrice = showAuto ? p.price_sek : (p.original_price_sek ?? p.price_sek);
           const shownWas = showWas ? p.original_price_sek : null;
+          const shownGbp = p.price_gbp != null ? Number(p.price_gbp) : fxGbp(showAuto ? p.price_sek : (p.original_price_sek ?? p.price_sek));
+          const shownWasGbp = showWas ? (p.original_price_gbp != null ? Number(p.original_price_gbp) : fxGbp(p.original_price_sek)) : null;
           return (
             <Card key={p.id} className={`pricing-card${p.is_featured ? ' featured' : ''}${current ? ' current' : ''}`}>
               {p.is_featured ? <Badge>{t('pricing.popular')}</Badge> : null}
@@ -297,10 +301,23 @@ export default function Pricing() {
               <h2>{p.name}</h2>
               <p className="pricing-tagline">{p.tagline}</p>
               <div className="pricing-price">
-                {shownWas != null ? <span className="pricing-was">{shownWas} kr</span> : null}
-                <b>{shownPrice}</b>
-                <span> kr / {t('pricing.month')}</span>
+                {gbpMode ? (
+                  <>
+                    {shownWasGbp != null ? <span className="pricing-was">{fmtGbp(shownWasGbp)}</span> : null}
+                    <b>{fmtGbp(shownGbp)}</b>
+                    <span> / {t('pricing.month')}</span>
+                  </>
+                ) : (
+                  <>
+                    {shownWas != null ? <span className="pricing-was">{shownWas} kr</span> : null}
+                    <b>{shownPrice}</b>
+                    <span> kr / {t('pricing.month')}</span>
+                  </>
+                )}
               </div>
+              {gbpMode && !p.is_free && shownPrice > 0 ? (
+                <p className="pricing-note">{t('pricing.billedInSek', { sek: shownPrice, gbp: fmtGbp(shownGbp) })}</p>
+              ) : null}
               <div className="pricing-credits">{t('pricing.creditsPerMonth', { n: p.monthly_credits })}</div>
               {showAuto ? <p className="pricing-note">{t('pricing.firstMonthNote')}</p> : null}
               <ul className="pricing-features">
@@ -347,10 +364,11 @@ export default function Pricing() {
           {topupQuote ? (
             <>
               <div className="pricing-topup-total">
-                <b>{topupQuote.price} kr</b>
+                <b>{gbpMode ? `≈ ${fmtGbp(topupQuote.price_gbp != null ? topupQuote.price_gbp : fxGbp(topupQuote.price))}` : `${topupQuote.price} kr`}</b>
                 <span>{t('pricing.topupTotal')}</span>
               </div>
               <div className="pricing-topup-per">{t('pricing.topupPerCredit', { rate: topupQuote.perCredit })}</div>
+              {gbpMode ? <p className="pricing-note">{t('pricing.billedInSek', { sek: topupQuote.price, gbp: fmtGbp(topupQuote.price_gbp != null ? topupQuote.price_gbp : fxGbp(topupQuote.price)) })}</p> : null}
             </>
           ) : (
             <div className="pricing-note" style={{ color: 'var(--text-dim)' }}>{t('common.loading')}</div>

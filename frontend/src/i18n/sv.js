@@ -1417,6 +1417,7 @@ export default {
   "pricing.topupRange": "Välj mellan {min} och {max} krediter.",
   "pricing.topupTotal": "engångsbetalning",
   "pricing.topupPerCredit": "{rate} kr per kredit",
+  "pricing.billedInSek": "Debiteras i svenska kronor: {sek} kr. {gbp} är en ungefärlig omräkning.",
   "pricing.topupButton": "Köp krediter",
   "pricing.topupPay": "Köp {n} krediter",
   "pricing.topupPaid": "Krediterna har lagts till på ditt saldo.",

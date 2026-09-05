@@ -1417,6 +1417,7 @@ export default {
   "pricing.topupRange": "اختر بين {min} و{max} نقطة.",
   "pricing.topupTotal": "دفعة لمرة واحدة",
   "pricing.topupPerCredit": "{rate} كرونة لكل نقطة",
+  "pricing.billedInSek": "سيتم الخصم بالكرونة السويدية: {sek} كرونة. المبلغ المعروض {gbp} هو تحويل تقريبي.",
   "pricing.topupButton": "اشترِ نقاطاً",
   "pricing.topupPay": "اشترِ {n} نقطة",
   "pricing.topupPaid": "أُضيفت النقاط إلى رصيدك.",

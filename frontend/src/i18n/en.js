@@ -1417,6 +1417,7 @@ export default {
   "pricing.topupRange": "Choose between {min} and {max} credits.",
   "pricing.topupTotal": "pay once",
   "pricing.topupPerCredit": "{rate} kr per credit",
+  "pricing.billedInSek": "Billed in Swedish kronor: {sek} kr. The {gbp} shown is an approximate conversion.",
   "pricing.topupButton": "Buy credits",
   "pricing.topupPay": "Buy {n} credits",
   "pricing.topupPaid": "Credits added to your wallet.",

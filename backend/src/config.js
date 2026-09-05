@@ -57,6 +57,9 @@ export const config = {
     email: process.env.ADMIN_EMAIL || 'admin@gamingplatform.local',
     password: process.env.ADMIN_PASSWORD || 'Admin12345!',
   },
+  // Approximate SEK -> GBP rate used ONLY for display conversion (billing
+  // remains SEK). Override with FX_SEK_TO_GBP when the rate moves.
+  fxSekToGbp: Number(process.env.FX_SEK_TO_GBP || 0.07734),
 };
 
 if (!fs.existsSync(path.dirname(config.dbPath))) {

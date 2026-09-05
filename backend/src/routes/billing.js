@@ -16,6 +16,10 @@ import { referralDiscountFor, referralStatsFor, referralEnabled } from '../servi
 
 const router = Router();
 
+const FX = config.fxSekToGbp;
+const toGbp = (sek) => (sek == null ? null : Math.round((Number(sek) || 0) * FX * 100) / 100);
+const perCreditGbp = (sekTotal, credits) => Math.round(((Number(sekTotal) || 0) * FX) / (Math.trunc(Number(credits)) || 1) * 100) / 100;
+
 function checkoutOrigin(req) {
   const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
@@ -31,6 +35,8 @@ router.get('/plans', (req, res) => {
       ...p,
       original_price_sek: priced.original,
       price_sek: priced.amount,
+      original_price_gbp: toGbp(priced.original),
+      price_gbp: toGbp(priced.amount),
       offer: best ? {
         id: best.id,
         code: best.code,
@@ -61,7 +67,11 @@ router.get('/topup-quote', (req, res) => {
     const info = creditsTopupInfo();
     return fail(res, 400, 'VALIDATION', `Choose between ${info.min} and ${info.max} credits.`);
   }
-  ok(res, quote);
+  ok(res, {
+    ...quote,
+    price_gbp: toGbp(quote.price),
+    perCredit_gbp: perCreditGbp(quote.price, quote.credits),
+  });
 });
 
 // Buy extra AI credits as a one-time payment (Stripe Checkout, mode: payment).
